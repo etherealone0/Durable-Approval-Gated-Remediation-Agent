@@ -177,7 +177,7 @@ class _InstrumentedRiskClassifier:
         return result
 
 
-def _build_sandbox(service_urls: dict[str, str] | None) -> tuple[dict[str, httpx.AsyncClient], ToolContext]:
+def build_sandbox(service_urls: dict[str, str] | None) -> tuple[dict[str, httpx.AsyncClient], ToolContext]:
     if service_urls:
         clients = {name: httpx.AsyncClient(base_url=url) for name, url in service_urls.items()}
     else:
@@ -229,7 +229,7 @@ async def run_scenario(
     simulated wait (simulated_approval_wait_seconds) rather than a real
     human — long enough for compute_idle_ratio to show a real gap between
     wall-clock and active-compute time without the suite taking hours."""
-    clients, tool_ctx = _build_sandbox(service_urls)
+    clients, tool_ctx = build_sandbox(service_urls)
     try:
         await FaultInjector(clients).inject(
             scenario["fault_injection"]["service"],
