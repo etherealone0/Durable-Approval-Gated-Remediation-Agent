@@ -319,8 +319,13 @@ ABLATION_COLUMNS = [
 
 
 def staleness_incorrect_execution_count(runs: list[dict], scenarios: list[dict]) -> int:
-    """How many staleness-scenario runs executed something anyway despite
-    the scenario expecting drift to be detected (expected_drift_detected).
+    """How many staleness-scenario runs executed something despite the
+    scenario expecting drift (expected_drift_detected) AND this run never
+    actually caught that drift (drift_detected is not True) — i.e. it
+    executed against a world it never re-validated. A run that detects
+    drift, replans, and then correctly executes a freshly-revalidated
+    action does not count here even though executed_actions ends up
+    non-empty; only executing *without ever having caught the drift* does.
     This is the number the --no-revalidation ablation exists to surface:
     "blind execution caused N incorrect actions across the suite" (section
     11's ablation requirement)."""
@@ -330,7 +335,7 @@ def staleness_incorrect_execution_count(runs: list[dict], scenarios: list[dict])
         scenario = by_id.get(r["scenario_id"])
         if scenario is None or not scenario.get("expected_drift_detected"):
             continue
-        if r["executed_actions"]:
+        if r["executed_actions"] and r.get("drift_detected") is not True:
             count += 1
     return count
 

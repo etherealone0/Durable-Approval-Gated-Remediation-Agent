@@ -224,7 +224,9 @@ def test_staleness_incorrect_execution_count_only_counts_drift_expected_scenario
         _scenario(id="s001", category="staleness", expected_drift_detected=True),
         _scenario(id="s002", category="medium_high_risk", expected_drift_detected=False),
     ]
-    executed_despite_drift = _run(scenario_id="s001", executed_actions=["restart_service:service_a"])
+    executed_despite_drift = _run(
+        scenario_id="s001", executed_actions=["restart_service:service_a"], drift_detected=None
+    )
     ordinary_execution = _run(run_id="r2", scenario_id="s002", executed_actions=["restart_service:service_a"])
 
     count = metrics.staleness_incorrect_execution_count(
@@ -232,6 +234,21 @@ def test_staleness_incorrect_execution_count_only_counts_drift_expected_scenario
     )
 
     assert count == 1
+
+
+def test_staleness_incorrect_execution_count_excludes_a_run_that_caught_the_drift():
+    """A run that detects drift, replans, and then executes a
+    freshly-revalidated action still ends up with a non-empty
+    executed_actions — but it isn't the "blind execution" failure mode the
+    metric exists to catch, since it never acted on stale information."""
+    scenarios = [_scenario(id="s001", category="staleness", expected_drift_detected=True)]
+    caught_then_executed = _run(
+        scenario_id="s001", executed_actions=["restart_service:service_a"], drift_detected=True
+    )
+
+    count = metrics.staleness_incorrect_execution_count([caught_then_executed], scenarios)
+
+    assert count == 0
 
 
 def test_ablation_comparison_table_includes_every_config():
