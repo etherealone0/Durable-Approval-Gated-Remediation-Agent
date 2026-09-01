@@ -9,3 +9,4 @@ results/*.jsonl
 results/*.json
 node_modules/
 .next/
+PROJECT_SPEC.md
