@@ -14,6 +14,7 @@ from src.agent.observations import gather_observations
 from src.agent.runtime import AgentRuntimeContext
 from src.agent.state import MAX_REPLAN_CYCLES, AgentState, State
 from src.revalidation.fingerprint import compute_fingerprint
+from src.risk.policy import apply_policy
 
 
 async def diagnose(state: AgentState) -> dict[str, Any]:
@@ -42,8 +43,19 @@ async def propose_action(state: AgentState) -> dict[str, Any]:
 
 
 async def classify_risk(state: AgentState) -> dict[str, Any]:
-    risk_tier = state.get("test_risk_tier") or "low"
-    return {"status": State.RISK_CLASSIFIED.value, "risk_tier_llm": risk_tier, "risk_tier_final": risk_tier}
+    runtime = get_runtime(AgentRuntimeContext)
+    tool, _target = state["proposed_action"].split(":", 1)
+    result = await runtime.context.risk_classifier.classify(
+        state["proposed_action"], state["diagnosis"], state.get("action_rationale")
+    )
+    llm_tier = result["tier"]
+    final_tier = apply_policy(tool, llm_tier)
+    return {
+        "status": State.RISK_CLASSIFIED.value,
+        "risk_tier_llm": llm_tier,
+        "risk_tier_final": final_tier,
+        "risk_rationale": result["rationale"],
+    }
 
 
 def route_after_risk_classification(state: AgentState) -> str:

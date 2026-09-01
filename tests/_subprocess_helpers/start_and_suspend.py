@@ -14,14 +14,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from src.agent.graph import build_graph, start_workflow  # noqa: E402
 from src.agent.runtime import AgentRuntimeContext  # noqa: E402
 from src.durability.checkpointer import postgres_checkpointer, run_async  # noqa: E402
-from tests.helpers import ScriptedReasoner, build_tool_ctx  # noqa: E402
+from tests.helpers import ScriptedReasoner, ScriptedRiskClassifier, build_tool_ctx  # noqa: E402
 
 
 async def main(dsn: str, thread_id: str) -> None:
-    context = AgentRuntimeContext(tool_ctx=build_tool_ctx(), reasoner=ScriptedReasoner())
+    context = AgentRuntimeContext(
+        tool_ctx=build_tool_ctx(), reasoner=ScriptedReasoner(), risk_classifier=ScriptedRiskClassifier("medium")
+    )
     async with postgres_checkpointer(dsn) as checkpointer:
         graph = build_graph(checkpointer)
-        result = await start_workflow(graph, thread_id, {"test_risk_tier": "medium"}, context)
+        result = await start_workflow(graph, thread_id, {}, context)
         print(json.dumps({"status": result.get("status"), "suspended": "__interrupt__" in result}))
 
 

@@ -3,12 +3,12 @@ machine diagram in PROJECT_SPEC.md section 4.
 
 Some nodes are still stubs, driven by test-provided hints on the initial
 input state, wherever the real logic belongs to a later phase:
-  - classify_risk: real LLM + deterministic policy lands in Prompt 7.
   - revalidate: real staleness detection lands in Prompt 8.
   - execute / verify / rolling_back: real tool execution and
     compensation lands in Prompt 9.
 diagnose and propose_action are real as of Prompt 6 (src/agent/diagnosis.py,
-src/agent/observations.py, src/revalidation/fingerprint.py).
+src/agent/observations.py, src/revalidation/fingerprint.py). classify_risk
+is real as of Prompt 7 (src/risk/classifier.py, src/risk/policy.py).
 """
 
 from __future__ import annotations
@@ -51,6 +51,7 @@ class AgentState(TypedDict, total=False):
 
     risk_tier_llm: str | None
     risk_tier_final: str | None
+    risk_rationale: str | None
 
     approval_decision: ApprovalDecision | None
     approver_id: str | None
@@ -69,6 +70,5 @@ class AgentState(TypedDict, total=False):
 
     # Deterministic stub hints consumed by src/agent/nodes.py until the
     # real logic behind each of them is implemented (see module docstring).
-    test_risk_tier: str | None
     test_drift_detected: bool | None
     test_verification_passed: bool | None

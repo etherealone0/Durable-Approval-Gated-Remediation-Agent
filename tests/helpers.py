@@ -1,6 +1,6 @@
 """Shared test doubles for exercising the agent graph without a live LLM
 or docker-compose: an in-process ToolContext backed by ASGITransport mock
-services, and a scripted DiagnosisReasoner."""
+services, a scripted DiagnosisReasoner, and a scripted RiskClassifier."""
 
 from __future__ import annotations
 
@@ -44,3 +44,20 @@ class ScriptedReasoner:
     ) -> dict[str, Any]:
         self.propose_action_calls.append(replan_context)
         return {"tool": self.tool, "target": self.target, "rationale": "stub rationale"}
+
+
+class ScriptedRiskClassifier:
+    """Always returns the same tier; tests the graph's plumbing and the
+    deterministic policy override, not risk-judgment quality."""
+
+    def __init__(self, tier: str = "low") -> None:
+        self.tier = tier
+
+    async def classify(self, proposed_action: str, diagnosis: str, rationale: str | None) -> dict[str, Any]:
+        return {
+            "tier": self.tier,
+            "reversibility": "stub",
+            "blast_radius": "stub",
+            "data_destructiveness": "stub",
+            "rationale": "stub rationale",
+        }
