@@ -48,3 +48,22 @@ CREATE TABLE IF NOT EXISTS audit_log (
     rationale TEXT
 );
 CREATE INDEX IF NOT EXISTS audit_log_run_id_idx ON audit_log (run_id, id);
+
+-- Latest-known-status index for the API (PROJECT_SPEC.md section 10): a
+-- denormalized snapshot per run so GET /runs/{id} and GET
+-- /runs/pending-approval don't need to touch the checkpointer directly.
+-- The audit_log remains the source of truth for history; this is just a
+-- queryable cache updated after every start/resume call.
+CREATE TABLE IF NOT EXISTS runs (
+    run_id TEXT PRIMARY KEY,
+    status TEXT NOT NULL,
+    scenario_id TEXT,
+    diagnosis TEXT,
+    proposed_action TEXT,
+    risk_tier TEXT,
+    rationale TEXT,
+    final_state TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS runs_status_idx ON runs (status);
