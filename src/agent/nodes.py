@@ -14,11 +14,13 @@ from src.agent.execution import apply_compensation, execute_action, verify_actio
 from src.agent.observations import gather_observations
 from src.agent.runtime import AgentRuntimeContext
 from src.agent.state import MAX_REPLAN_CYCLES, AgentState, State
+from src.chaos.hooks import mark
 from src.revalidation.fingerprint import compute_fingerprint
 from src.risk.policy import apply_policy
 
 
 async def diagnose(state: AgentState) -> dict[str, Any]:
+    await mark("DIAGNOSING")
     runtime = get_runtime(AgentRuntimeContext)
     observations = await gather_observations(runtime.context.tool_ctx)
     diagnosis = await runtime.context.reasoner.diagnose(observations)
@@ -145,6 +147,7 @@ async def execute(state: AgentState) -> dict[str, Any]:
         state.get("action_parameters") or {},
         state["idempotency_key"],
     )
+    await mark("EXECUTING")  # after the tool call's real side effect, before this checkpoints
     return {
         "status": State.EXECUTING.value,
         "execution_result": outcome["result"],
@@ -167,6 +170,7 @@ def route_after_verification(state: AgentState) -> str:
 async def rolling_back(state: AgentState) -> dict[str, Any]:
     runtime = get_runtime(AgentRuntimeContext)
     rollback_result = await apply_compensation(runtime.context.tool_ctx, state["compensation"])
+    await mark("ROLLING_BACK")  # after the compensation's real side effect, before this checkpoints
     return {"status": State.ROLLING_BACK.value, "rollback_result": rollback_result}
 
 

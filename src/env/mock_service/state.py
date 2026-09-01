@@ -171,9 +171,13 @@ class ServiceState:
 
     def deploy(self, version: str) -> str:
         """Push `version` as the new current deployed version. Used both as
-        a general deploy action and to compensate a prior rollback."""
+        a general deploy action and to compensate a prior rollback. A
+        repeat call with the version already current is a no-op rather
+        than appending a duplicate entry, so replaying this (e.g. after a
+        chaos-harness kill mid-ROLLING_BACK) can't double-apply."""
         previous = self.deployed_version
-        self.version_history.append(version)
+        if version != previous:
+            self.version_history.append(version)
         return previous
 
     def reset(self) -> None:
