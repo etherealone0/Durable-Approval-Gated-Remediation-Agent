@@ -15,25 +15,31 @@ from langgraph.types import Command
 from src.agent import nodes
 from src.agent.runtime import AgentRuntimeContext
 from src.agent.state import AgentState
+from src.audit.hook import with_audit
+
+NODES = {
+    "diagnose": nodes.diagnose,
+    "propose_action": nodes.propose_action,
+    "classify_risk": nodes.classify_risk,
+    "mark_awaiting_approval": nodes.mark_awaiting_approval,
+    "await_approval": nodes.await_approval,
+    "revalidate": nodes.revalidate,
+    "prepare_execution": nodes.prepare_execution,
+    "execute": nodes.execute,
+    "verify": nodes.verify,
+    "rolling_back": nodes.rolling_back,
+    "rolled_back": nodes.rolled_back,
+    "replan": nodes.replan,
+    "escalate": nodes.escalate,
+    "completed": nodes.completed,
+}
 
 
 def build_graph(checkpointer) -> CompiledStateGraph:
     graph = StateGraph(AgentState, context_schema=AgentRuntimeContext)
 
-    graph.add_node("diagnose", nodes.diagnose)
-    graph.add_node("propose_action", nodes.propose_action)
-    graph.add_node("classify_risk", nodes.classify_risk)
-    graph.add_node("mark_awaiting_approval", nodes.mark_awaiting_approval)
-    graph.add_node("await_approval", nodes.await_approval)
-    graph.add_node("revalidate", nodes.revalidate)
-    graph.add_node("prepare_execution", nodes.prepare_execution)
-    graph.add_node("execute", nodes.execute)
-    graph.add_node("verify", nodes.verify)
-    graph.add_node("rolling_back", nodes.rolling_back)
-    graph.add_node("rolled_back", nodes.rolled_back)
-    graph.add_node("replan", nodes.replan)
-    graph.add_node("escalate", nodes.escalate)
-    graph.add_node("completed", nodes.completed)
+    for name, fn in NODES.items():
+        graph.add_node(name, with_audit(name, fn))
 
     graph.add_edge(START, "diagnose")
     graph.add_edge("diagnose", "propose_action")

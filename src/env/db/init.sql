@@ -29,3 +29,22 @@ CREATE TABLE IF NOT EXISTS executed_actions (
     compensation JSONB NOT NULL,
     executed_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Append-only audit trail (PROJECT_SPEC.md section 9): one row per state
+-- transition, complete enough to reconstruct any run end-to-end from this
+-- table alone (see src/audit/replay.py).
+CREATE TABLE IF NOT EXISTS audit_log (
+    id SERIAL PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    ts TIMESTAMPTZ NOT NULL,
+    from_state TEXT,
+    to_state TEXT,
+    actor TEXT NOT NULL,
+    action_proposed TEXT,
+    risk_tier TEXT,
+    approver_id TEXT,
+    decision TEXT,
+    idempotency_key TEXT,
+    rationale TEXT
+);
+CREATE INDEX IF NOT EXISTS audit_log_run_id_idx ON audit_log (run_id, id);
