@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: interlock
+      POSTGRES_PASSWORD: interlock
+      POSTGRES_DB: interlock
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./src/env/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U interlock"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  service_a:
+    build:
+      context: .
+      dockerfile: src/env/mock_service/Dockerfile
+    environment:
+      SERVICE_NAME: service_a
+      SERVICE_ROLE: compute
+    ports:
+      - "8001:8000"
+
+  service_b:
+    build:
+      context: .
+      dockerfile: src/env/mock_service/Dockerfile
+    environment:
+      SERVICE_NAME: service_b
+      SERVICE_ROLE: compute
+    ports:
+      - "8002:8000"
+
+  service_c:
+    build:
+      context: .
+      dockerfile: src/env/mock_service/Dockerfile
+    environment:
+      SERVICE_NAME: service_c
+      SERVICE_ROLE: disk
+    ports:
+      - "8003:8000"
