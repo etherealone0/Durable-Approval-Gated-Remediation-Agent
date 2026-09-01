@@ -42,6 +42,11 @@ class ActionProposalOutput(BaseModel):
         description="A service name for every tool except delete_records, where it's a record kind."
     )
     rationale: str = Field(description="Why this action addresses the root cause, not just the symptom.")
+    parameters: dict[str, Any] = Field(
+        default_factory=dict,
+        description='Extra args the tool needs beyond target: {"replicas": int} for scale_service, '
+        '{"key": str, "value": str} for apply_config_change. Omit for every other tool.',
+    )
 
 
 class DiagnosisReasoner(Protocol):
@@ -64,10 +69,11 @@ TOOL_GUIDE = f"""Available tools you may propose (tool:target form):
 - restart_service:<service> — restarts a process; fixes memory leaks, CPU spikes, \
 elevated error rates, and crashed services. Does NOT free disk space.
 - scale_service:<service> — adds replicas; a reasonable alternative to restarting \
-for load-driven issues.
+for load-driven issues. Requires parameters: {{"replicas": <int>}}.
 - clear_cache:<service> — frees local disk space on a service. This is the ONLY \
 fix for high disk usage.
-- apply_config_change:<service> — changes a config value.
+- apply_config_change:<service> — changes a config value. Requires parameters: \
+{{"key": <str>, "value": <str>}}.
 - rollback_deployment:<service> — reverts to the previous deployed version; use \
 only when a version change (visible in deployed_version) is the actual cause.
 - delete_records:<kind> — permanently deletes database rows, kind is one of \

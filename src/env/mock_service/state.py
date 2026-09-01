@@ -156,10 +156,17 @@ class ServiceState:
 
     def rollback(self) -> tuple[str, str]:
         """Pop the current deployed version and fall back to the previous
-        one. Returns (previous_current, new_current)."""
+        one. Returns (previous_current, new_current). Also clears transient
+        faults (not disk usage), since switching away from a bad release
+        stops that release's misbehavior, same as restart()."""
         if len(self.version_history) < 2:
             raise ValueError(f"{self.name} has no prior version to roll back to")
         previous_current = self.version_history.pop()
+        self.memory_pct = BASELINE_MEMORY_PCT
+        self.cpu_pct = BASELINE_CPU_PCT
+        self.error_rate = BASELINE_ERROR_RATE
+        self.forced_down = False
+        self.active_faults = [f for f in self.active_faults if f == FaultType.DISK_FULL.value]
         return previous_current, self.deployed_version
 
     def deploy(self, version: str) -> str:

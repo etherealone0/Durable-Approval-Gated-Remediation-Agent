@@ -26,6 +26,7 @@ def build_graph(checkpointer) -> CompiledStateGraph:
     graph.add_node("mark_awaiting_approval", nodes.mark_awaiting_approval)
     graph.add_node("await_approval", nodes.await_approval)
     graph.add_node("revalidate", nodes.revalidate)
+    graph.add_node("prepare_execution", nodes.prepare_execution)
     graph.add_node("execute", nodes.execute)
     graph.add_node("verify", nodes.verify)
     graph.add_node("rolling_back", nodes.rolling_back)
@@ -38,13 +39,16 @@ def build_graph(checkpointer) -> CompiledStateGraph:
     graph.add_edge("diagnose", "propose_action")
     graph.add_edge("propose_action", "classify_risk")
     graph.add_conditional_edges(
-        "classify_risk", nodes.route_after_risk_classification, ["execute", "mark_awaiting_approval"]
+        "classify_risk", nodes.route_after_risk_classification, ["prepare_execution", "mark_awaiting_approval"]
     )
     graph.add_edge("mark_awaiting_approval", "await_approval")
     graph.add_conditional_edges(
         "await_approval", nodes.route_after_approval, ["revalidate", "replan", "escalate"]
     )
-    graph.add_conditional_edges("revalidate", nodes.route_after_revalidation, ["replan", "execute"])
+    graph.add_conditional_edges(
+        "revalidate", nodes.route_after_revalidation, ["replan", "prepare_execution"]
+    )
+    graph.add_edge("prepare_execution", "execute")
     graph.add_edge("execute", "verify")
     graph.add_conditional_edges("verify", nodes.route_after_verification, ["completed", "rolling_back"])
     graph.add_edge("rolling_back", "rolled_back")

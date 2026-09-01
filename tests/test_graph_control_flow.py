@@ -56,7 +56,8 @@ async def test_every_named_state_is_persisted_in_order_for_the_happy_path(graph,
         State.DIAGNOSING.value,
         State.ACTION_PROPOSED.value,
         State.RISK_CLASSIFIED.value,
-        State.EXECUTING.value,
+        State.EXECUTING.value,  # prepare_execution: idempotency_key persisted
+        State.EXECUTING.value,  # execute: the tool actually ran
         State.VERIFYING.value,
         State.COMPLETED.value,
     ]
@@ -161,11 +162,22 @@ async def test_repeated_rejection_is_capped_at_three_replans_then_escalates(grap
     assert r3["status"] == State.ESCALATED.value
 
 
-async def test_verification_failure_rolls_back_and_eventually_escalates(graph, make_context):
-    context = make_context(tier="low")
-    result = await start_workflow(graph, "run-verify-fail", {"test_verification_passed": False}, context)
+async def test_verification_failure_rolls_back_and_eventually_escalates(graph):
+    # restart_service never clears disk usage, so restarting a
+    # permanently disk-full service fails verification every attempt,
+    # exercising the rollback -> replan loop for real up to the cap.
+    ctx = build_tool_ctx()
+    await ctx.client("service_c").post("/admin/fault", json={"type": "disk_full", "rate": "high"})
+    context = AgentRuntimeContext(
+        tool_ctx=ctx,
+        reasoner=ScriptedReasoner(tool="restart_service", target="service_c"),
+        risk_classifier=ScriptedRiskClassifier("low"),
+    )
+
+    result = await start_workflow(graph, "run-verify-fail", {}, context)
 
     assert result["status"] == State.ESCALATED.value
     assert result["replan_cycles"] == 3
-    assert result["rollback_result"] is not None
+    assert result["verification_passed"] is False
+    assert result["rollback_result"] == {"applied": False, "reason": "restart has no reversible side effect"}
     assert "did not fix" in result["replan_context"]

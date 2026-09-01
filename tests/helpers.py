@@ -31,9 +31,15 @@ class ScriptedReasoner:
     quality (that needs a real LLM, exercised separately with an API key
     against the scenario suite)."""
 
-    def __init__(self, tool: str = "restart_service", target: str = "service_a") -> None:
+    def __init__(
+        self,
+        tool: str = "restart_service",
+        target: str = "service_a",
+        parameters: dict[str, Any] | None = None,
+    ) -> None:
         self.tool = tool
         self.target = target
+        self.parameters = parameters or {}
         self.propose_action_calls: list[str | None] = []
 
     async def diagnose(self, observations: dict[str, Any]) -> dict[str, Any]:
@@ -43,7 +49,12 @@ class ScriptedReasoner:
         self, observations: dict[str, Any], diagnosis: dict[str, Any], replan_context: str | None
     ) -> dict[str, Any]:
         self.propose_action_calls.append(replan_context)
-        return {"tool": self.tool, "target": self.target, "rationale": "stub rationale"}
+        return {
+            "tool": self.tool,
+            "target": self.target,
+            "rationale": "stub rationale",
+            "parameters": self.parameters,
+        }
 
 
 class ScriptedRiskClassifier:

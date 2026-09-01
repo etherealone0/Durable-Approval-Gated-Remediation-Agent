@@ -10,6 +10,7 @@ from typing import Any
 from langgraph.runtime import get_runtime
 from langgraph.types import interrupt
 
+from src.agent.execution import apply_compensation, execute_action, verify_action
 from src.agent.observations import gather_observations
 from src.agent.runtime import AgentRuntimeContext
 from src.agent.state import MAX_REPLAN_CYCLES, AgentState, State
@@ -37,6 +38,7 @@ async def propose_action(state: AgentState) -> dict[str, Any]:
     return {
         "status": State.ACTION_PROPOSED.value,
         "proposed_action": proposed_action,
+        "action_parameters": action.get("parameters", {}),
         "action_rationale": action["rationale"],
         "state_fingerprint": fingerprint,
     }
@@ -59,7 +61,7 @@ async def classify_risk(state: AgentState) -> dict[str, Any]:
 
 
 def route_after_risk_classification(state: AgentState) -> str:
-    return "execute" if state["risk_tier_final"] == "low" else "mark_awaiting_approval"
+    return "prepare_execution" if state["risk_tier_final"] == "low" else "mark_awaiting_approval"
 
 
 async def mark_awaiting_approval(state: AgentState) -> dict[str, Any]:
@@ -122,20 +124,39 @@ async def revalidate(state: AgentState) -> dict[str, Any]:
 
 
 def route_after_revalidation(state: AgentState) -> str:
-    return "replan" if state["drift_detected"] else "execute"
+    return "replan" if state["drift_detected"] else "prepare_execution"
+
+
+async def prepare_execution(state: AgentState) -> dict[str, Any]:
+    """A deterministic key derived from run_id + proposed_action, not a
+    random one: if the process dies mid-EXECUTING, LangGraph reruns this
+    whole node from scratch on resume, and it must regenerate the exact
+    same key so the mutating tool's own idempotency check (section 8)
+    recognizes the retry and no-ops instead of double-applying."""
+    idempotency_key = f"{state['run_id']}:{state['proposed_action']}"
+    return {"status": State.EXECUTING.value, "idempotency_key": idempotency_key}
 
 
 async def execute(state: AgentState) -> dict[str, Any]:
-    idempotency_key = f"{state['run_id']}:{state['proposed_action']}"
+    runtime = get_runtime(AgentRuntimeContext)
+    outcome = await execute_action(
+        runtime.context.tool_ctx,
+        state["proposed_action"],
+        state.get("action_parameters") or {},
+        state["idempotency_key"],
+    )
     return {
         "status": State.EXECUTING.value,
-        "idempotency_key": idempotency_key,
-        "execution_result": {"action": state["proposed_action"]},
+        "execution_result": outcome["result"],
+        "compensation": outcome["compensation"],
     }
 
 
 async def verify(state: AgentState) -> dict[str, Any]:
-    verification_passed = bool(state.get("test_verification_passed", True))
+    runtime = get_runtime(AgentRuntimeContext)
+    verification_passed = await verify_action(
+        runtime.context.tool_ctx, state["proposed_action"], state["execution_result"]
+    )
     return {"status": State.VERIFYING.value, "verification_passed": verification_passed}
 
 
@@ -144,7 +165,9 @@ def route_after_verification(state: AgentState) -> str:
 
 
 async def rolling_back(state: AgentState) -> dict[str, Any]:
-    return {"status": State.ROLLING_BACK.value, "rollback_result": {"compensated": state.get("proposed_action")}}
+    runtime = get_runtime(AgentRuntimeContext)
+    rollback_result = await apply_compensation(runtime.context.tool_ctx, state["compensation"])
+    return {"status": State.ROLLING_BACK.value, "rollback_result": rollback_result}
 
 
 async def rolled_back(state: AgentState) -> dict[str, Any]:
