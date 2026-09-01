@@ -40,6 +40,9 @@ BASELINE_MEMORY_PCT = 20.0
 BASELINE_CPU_PCT = 15.0
 BASELINE_DISK_PCT = 30.0
 BASELINE_ERROR_RATE = 0.0
+BASELINE_REPLICAS = 1
+BASELINE_CONFIG = {"log_level": "info", "max_connections": "100", "cache_ttl_seconds": "300"}
+BASELINE_VERSION_HISTORY = ["v1.0.0", "v1.1.0", "v1.2.0"]
 
 DEGRADED_THRESHOLD = 75.0
 UNHEALTHY_THRESHOLD = 90.0
@@ -60,6 +63,14 @@ class ServiceState:
     restart_count: int = 0
     active_faults: list[str] = field(default_factory=list)
 
+    replicas: int = BASELINE_REPLICAS
+    config: dict[str, str] = field(default_factory=lambda: dict(BASELINE_CONFIG))
+    version_history: list[str] = field(default_factory=lambda: list(BASELINE_VERSION_HISTORY))
+
+    @property
+    def deployed_version(self) -> str:
+        return self.version_history[-1]
+
     def status(self) -> str:
         if self.forced_down or self.error_rate >= UNHEALTHY_ERROR_RATE:
             return "unhealthy"
@@ -76,6 +87,7 @@ class ServiceState:
             "cpu_pct": self.cpu_pct,
             "error_rate": self.error_rate,
             "restart_count": self.restart_count,
+            "replicas": self.replicas,
         }
         if self.has_disk:
             data["disk_pct"] = self.disk_pct
@@ -131,6 +143,31 @@ class ServiceState:
         self.disk_pct = BASELINE_DISK_PCT
         self.active_faults = [f for f in self.active_faults if f != FaultType.DISK_FULL.value]
 
+    def scale(self, replicas: int) -> int:
+        previous = self.replicas
+        self.replicas = replicas
+        return previous
+
+    def set_config(self, key: str, value: str) -> str | None:
+        previous = self.config.get(key)
+        self.config[key] = value
+        return previous
+
+    def rollback(self) -> tuple[str, str]:
+        """Pop the current deployed version and fall back to the previous
+        one. Returns (previous_current, new_current)."""
+        if len(self.version_history) < 2:
+            raise ValueError(f"{self.name} has no prior version to roll back to")
+        previous_current = self.version_history.pop()
+        return previous_current, self.deployed_version
+
+    def deploy(self, version: str) -> str:
+        """Push `version` as the new current deployed version. Used both as
+        a general deploy action and to compensate a prior rollback."""
+        previous = self.deployed_version
+        self.version_history.append(version)
+        return previous
+
     def reset(self) -> None:
         self.memory_pct = BASELINE_MEMORY_PCT
         self.cpu_pct = BASELINE_CPU_PCT
@@ -139,3 +176,6 @@ class ServiceState:
         self.forced_down = False
         self.restart_count = 0
         self.active_faults = []
+        self.replicas = BASELINE_REPLICAS
+        self.config = dict(BASELINE_CONFIG)
+        self.version_history = list(BASELINE_VERSION_HISTORY)

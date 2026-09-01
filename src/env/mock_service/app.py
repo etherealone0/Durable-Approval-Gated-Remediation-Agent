@@ -20,6 +20,19 @@ class FaultRequest(BaseModel):
     rate: FaultRate = FaultRate.HIGH
 
 
+class ScaleRequest(BaseModel):
+    replicas: int
+
+
+class ConfigRequest(BaseModel):
+    key: str
+    value: str
+
+
+class DeployRequest(BaseModel):
+    version: str
+
+
 def create_app(name: str, has_disk: bool) -> FastAPI:
     state = ServiceState(name=name, has_disk=has_disk)
     app = FastAPI(title=f"mock-{name}")
@@ -41,6 +54,37 @@ def create_app(name: str, has_disk: bool) -> FastAPI:
     def restart():
         state.restart()
         return {"service": state.name, "restart_count": state.restart_count, "status": state.status()}
+
+    @app.post("/scale")
+    def scale(req: ScaleRequest):
+        previous = state.scale(req.replicas)
+        return {"service": state.name, "previous_replicas": previous, "replicas": state.replicas}
+
+    @app.get("/config")
+    def get_config():
+        return {"service": state.name, "config": state.config}
+
+    @app.post("/config")
+    def set_config(req: ConfigRequest):
+        previous = state.set_config(req.key, req.value)
+        return {"service": state.name, "key": req.key, "previous_value": previous, "value": req.value}
+
+    @app.get("/version")
+    def version():
+        return {"service": state.name, "deployed_version": state.deployed_version, "history": state.version_history}
+
+    @app.post("/rollback")
+    def rollback():
+        try:
+            previous_current, new_current = state.rollback()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"service": state.name, "rolled_back_from": previous_current, "deployed_version": new_current}
+
+    @app.post("/deploy")
+    def deploy(req: DeployRequest):
+        previous = state.deploy(req.version)
+        return {"service": state.name, "previous_version": previous, "deployed_version": state.deployed_version}
 
     if has_disk:
 

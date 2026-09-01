@@ -16,3 +16,16 @@ INSERT INTO records (kind, payload) VALUES
     ('session', 'session-a1: active'),
     ('session', 'session-a2: expired'),
     ('cache_entry', 'cache-key-42: stale');
+
+-- Idempotency ledger for mutating tools (PROJECT_SPEC.md section 8): a
+-- mutating tool checks its idempotency_key here before acting and no-ops
+-- on repeat, since the same key can be resumed against after a process
+-- kill and must not double-apply.
+CREATE TABLE IF NOT EXISTS executed_actions (
+    idempotency_key TEXT PRIMARY KEY,
+    tool_name TEXT NOT NULL,
+    args JSONB NOT NULL,
+    result JSONB NOT NULL,
+    compensation JSONB NOT NULL,
+    executed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
