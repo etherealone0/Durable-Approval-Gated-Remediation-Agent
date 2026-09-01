@@ -10,17 +10,7 @@ from __future__ import annotations
 
 from src.env.mock_service.state import FaultRate, FaultType
 from src.env.registry import KNOWN_SERVICES, has_disk
-
-KNOWN_TOOLS = {
-    "restart_service",
-    "scale_service",
-    "delete_records",
-    "clear_cache",
-    "apply_config_change",
-    "rollback_deployment",
-}
-
-RECORD_KINDS = {"order", "session", "cache_entry"}
+from src.tools.registry import KNOWN_TOOLS, RECORD_KINDS
 
 REQUIRED_RISK_TIERS = {"low", "medium", "high"}
 

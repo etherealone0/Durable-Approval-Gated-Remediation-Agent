@@ -1,17 +1,14 @@
 """The workflow's persisted state and the named states from the state
 machine diagram in PROJECT_SPEC.md section 4.
 
-Nodes are stubbed in this phase (Prompt 5: state machine and durable
-graph) wherever the real logic belongs to a later phase:
-  - diagnose / propose_action: real tool-calling diagnosis lands in
-    Prompt 6 (src/agent/nodes.py currently reads test-provided hints).
+Some nodes are still stubs, driven by test-provided hints on the initial
+input state, wherever the real logic belongs to a later phase:
   - classify_risk: real LLM + deterministic policy lands in Prompt 7.
   - revalidate: real staleness detection lands in Prompt 8.
   - execute / verify / rolling_back: real tool execution and
     compensation lands in Prompt 9.
-Each stub is deterministic and driven by hints on the initial input state
-so the graph's control flow (every named state and transition) is fully
-testable before that logic exists.
+diagnose and propose_action are real as of Prompt 6 (src/agent/diagnosis.py,
+src/agent/observations.py, src/revalidation/fingerprint.py).
 """
 
 from __future__ import annotations
@@ -46,8 +43,10 @@ class AgentState(TypedDict, total=False):
     scenario_id: str | None
     status: str
 
+    observations: dict[str, Any] | None
     diagnosis: str | None
     proposed_action: str | None
+    action_rationale: str | None
     state_fingerprint: str | None
 
     risk_tier_llm: str | None
@@ -65,6 +64,7 @@ class AgentState(TypedDict, total=False):
     rollback_result: dict[str, Any] | None
 
     replan_cycles: int
+    replan_context: str | None
     final_state: str | None
 
     # Deterministic stub hints consumed by src/agent/nodes.py until the

@@ -88,6 +88,7 @@ class ServiceState:
             "error_rate": self.error_rate,
             "restart_count": self.restart_count,
             "replicas": self.replicas,
+            "deployed_version": self.deployed_version,
         }
         if self.has_disk:
             data["disk_pct"] = self.disk_pct

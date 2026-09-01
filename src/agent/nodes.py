@@ -5,25 +5,38 @@ which future prompt replaces them with real logic.
 
 from __future__ import annotations
 
-import hashlib
 from typing import Any
 
+from langgraph.runtime import get_runtime
 from langgraph.types import interrupt
 
+from src.agent.observations import gather_observations
+from src.agent.runtime import AgentRuntimeContext
 from src.agent.state import MAX_REPLAN_CYCLES, AgentState, State
+from src.revalidation.fingerprint import compute_fingerprint
 
 
 async def diagnose(state: AgentState) -> dict[str, Any]:
-    diagnosis = state.get("diagnosis") or "stub diagnosis (real tool-calling diagnosis: Prompt 6)"
-    return {"status": State.DIAGNOSING.value, "diagnosis": diagnosis}
+    runtime = get_runtime(AgentRuntimeContext)
+    observations = await gather_observations(runtime.context.tool_ctx)
+    diagnosis = await runtime.context.reasoner.diagnose(observations)
+    return {"status": State.DIAGNOSING.value, "observations": observations, "diagnosis": diagnosis["summary"]}
 
 
 async def propose_action(state: AgentState) -> dict[str, Any]:
-    proposed_action = state.get("proposed_action") or "restart_service:service_a"
-    fingerprint = hashlib.sha256(f"{state['diagnosis']}:{proposed_action}".encode()).hexdigest()[:16]
+    """Also reached directly from REPLANNING (skipping DIAGNOSING), so this
+    must be able to produce a fresh proposal against the existing
+    diagnosis rather than assuming it's always the first attempt."""
+    runtime = get_runtime(AgentRuntimeContext)
+    action = await runtime.context.reasoner.propose_action(
+        state["observations"], {"summary": state["diagnosis"]}, state.get("replan_context")
+    )
+    proposed_action = f"{action['tool']}:{action['target']}"
+    fingerprint = compute_fingerprint(state["observations"], proposed_action)
     return {
         "status": State.ACTION_PROPOSED.value,
         "proposed_action": proposed_action,
+        "action_rationale": action["rationale"],
         "state_fingerprint": fingerprint,
     }
 
@@ -106,8 +119,23 @@ async def rolled_back(state: AgentState) -> dict[str, Any]:
     return {"status": State.ROLLED_BACK.value}
 
 
+def _replan_reason(state: AgentState) -> str:
+    action = state.get("proposed_action")
+    if state.get("approval_decision") == "rejected":
+        return f"a human reviewer rejected the proposed action ({action}); propose a different one"
+    if state.get("drift_detected"):
+        return f"the environment changed since {action} was proposed, invalidating that diagnosis's basis"
+    if state.get("verification_passed") is False:
+        return f"{action} was executed and rolled back because it did not fix the problem"
+    return f"{action} did not resolve the incident"
+
+
 async def replan(state: AgentState) -> dict[str, Any]:
-    return {"status": State.REPLANNING.value, "replan_cycles": state.get("replan_cycles", 0) + 1}
+    return {
+        "status": State.REPLANNING.value,
+        "replan_cycles": state.get("replan_cycles", 0) + 1,
+        "replan_context": _replan_reason(state),
+    }
 
 
 def route_after_replan(state: AgentState) -> str:

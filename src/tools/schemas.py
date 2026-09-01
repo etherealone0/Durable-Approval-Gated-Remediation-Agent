@@ -44,6 +44,7 @@ class GetMetricsOutput(BaseModel):
     error_rate: float
     restart_count: int
     replicas: int
+    deployed_version: str
     disk_pct: float | None = None
 
 

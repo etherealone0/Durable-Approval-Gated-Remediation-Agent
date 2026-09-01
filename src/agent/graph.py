@@ -13,11 +13,12 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
 from src.agent import nodes
+from src.agent.runtime import AgentRuntimeContext
 from src.agent.state import AgentState
 
 
 def build_graph(checkpointer) -> CompiledStateGraph:
-    graph = StateGraph(AgentState)
+    graph = StateGraph(AgentState, context_schema=AgentRuntimeContext)
 
     graph.add_node("diagnose", nodes.diagnose)
     graph.add_node("propose_action", nodes.propose_action)
@@ -55,16 +56,28 @@ def build_graph(checkpointer) -> CompiledStateGraph:
     return graph.compile(checkpointer=checkpointer)
 
 
-async def start_workflow(graph: CompiledStateGraph, run_id: str, initial_state: dict[str, Any]) -> dict[str, Any]:
+async def start_workflow(
+    graph: CompiledStateGraph,
+    run_id: str,
+    initial_state: dict[str, Any],
+    context: AgentRuntimeContext,
+) -> dict[str, Any]:
     """Starts a new run on thread_id=run_id and drives it up to either a
     terminal state or the approval interrupt."""
     config = {"configurable": {"thread_id": run_id}}
-    return await graph.ainvoke({"run_id": run_id, **initial_state}, config, durability="sync")
+    return await graph.ainvoke(
+        {"run_id": run_id, **initial_state}, config, context=context, durability="sync"
+    )
 
 
-async def resume_workflow(graph: CompiledStateGraph, run_id: str, decision: dict[str, Any]) -> dict[str, Any]:
+async def resume_workflow(
+    graph: CompiledStateGraph,
+    run_id: str,
+    decision: dict[str, Any],
+    context: AgentRuntimeContext,
+) -> dict[str, Any]:
     """Resumes a suspended run purely by thread_id; the caller need not
     have any in-memory state from when the run was started (see
     tests/test_graph_cross_process.py)."""
     config = {"configurable": {"thread_id": run_id}}
-    return await graph.ainvoke(Command(resume=decision), config, durability="sync")
+    return await graph.ainvoke(Command(resume=decision), config, context=context, durability="sync")

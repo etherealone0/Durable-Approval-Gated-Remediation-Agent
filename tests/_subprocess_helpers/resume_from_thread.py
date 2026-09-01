@@ -6,7 +6,6 @@ process originally suspended it.
 Usage: python resume_from_thread.py <dsn> <thread_id> <decision_json>
 """
 
-import asyncio
 import json
 import os
 import sys
@@ -14,14 +13,21 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.agent.graph import build_graph, resume_workflow  # noqa: E402
-from src.durability.checkpointer import postgres_checkpointer  # noqa: E402
+from src.agent.runtime import AgentRuntimeContext  # noqa: E402
+from src.durability.checkpointer import postgres_checkpointer, run_async  # noqa: E402
+from tests.helpers import ScriptedReasoner, build_tool_ctx  # noqa: E402
 
 
 async def main(dsn: str, thread_id: str, decision_json: str) -> None:
     decision = json.loads(decision_json)
+    # A fresh context object in a brand new process; the remaining nodes
+    # for this test's path (revalidate/execute/verify) don't touch it yet
+    # (still stubs, see state.py), but AgentRuntimeContext is required by
+    # the graph's context_schema regardless.
+    context = AgentRuntimeContext(tool_ctx=build_tool_ctx(), reasoner=ScriptedReasoner())
     async with postgres_checkpointer(dsn) as checkpointer:
         graph = build_graph(checkpointer)
-        result = await resume_workflow(graph, thread_id, decision)
+        result = await resume_workflow(graph, thread_id, decision, context)
         print(
             json.dumps(
                 {
@@ -35,4 +41,4 @@ async def main(dsn: str, thread_id: str, decision_json: str) -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main(sys.argv[1], sys.argv[2], sys.argv[3]))
+    run_async(main(sys.argv[1], sys.argv[2], sys.argv[3]))
