@@ -107,6 +107,20 @@ def route_after_approval(state: AgentState) -> str:
     return "escalate"  # timeout (SLA breach)
 
 
+def route_after_approval_no_revalidation(state: AgentState) -> str:
+    """The --no-revalidation ablation (PROJECT_SPEC.md section 11): skips
+    straight to prepare_execution on approval, executing the proposed
+    action blindly against whatever the world looks like now, with no
+    drift check at all. Used to measure how many incorrect actions
+    revalidation actually prevents (src/eval/runner.py)."""
+    decision = state["approval_decision"]
+    if decision in ("approved", "edited"):
+        return "prepare_execution"
+    if decision == "rejected":
+        return "replan"
+    return "escalate"  # timeout (SLA breach)
+
+
 async def revalidate(state: AgentState) -> dict[str, Any]:
     """Re-runs the read-only diagnostic sweep and recomputes the
     state_fingerprint against the same proposed_action; a mismatch means

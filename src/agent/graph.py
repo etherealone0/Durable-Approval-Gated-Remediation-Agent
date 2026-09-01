@@ -35,10 +35,19 @@ NODES = {
 }
 
 
-def build_graph(checkpointer) -> CompiledStateGraph:
+def build_graph(checkpointer, *, revalidate: bool = True) -> CompiledStateGraph:
+    """`revalidate=False` builds the --no-revalidation ablation (PROJECT_SPEC.md
+    section 11): the revalidate node is left out of the graph entirely and
+    an approved/edited decision routes straight to prepare_execution, so
+    an approved action is executed blindly against whatever the world
+    looks like at resume time. See src/eval/runner.py."""
     graph = StateGraph(AgentState, context_schema=AgentRuntimeContext)
 
-    for name, fn in NODES.items():
+    node_names = dict(NODES)
+    if not revalidate:
+        del node_names["revalidate"]
+
+    for name, fn in node_names.items():
         graph.add_node(name, with_audit(name, fn))
 
     graph.add_edge(START, "diagnose")
@@ -48,12 +57,21 @@ def build_graph(checkpointer) -> CompiledStateGraph:
         "classify_risk", nodes.route_after_risk_classification, ["prepare_execution", "mark_awaiting_approval"]
     )
     graph.add_edge("mark_awaiting_approval", "await_approval")
-    graph.add_conditional_edges(
-        "await_approval", nodes.route_after_approval, ["revalidate", "replan", "escalate"]
-    )
-    graph.add_conditional_edges(
-        "revalidate", nodes.route_after_revalidation, ["replan", "prepare_execution"]
-    )
+
+    if revalidate:
+        graph.add_conditional_edges(
+            "await_approval", nodes.route_after_approval, ["revalidate", "replan", "escalate"]
+        )
+        graph.add_conditional_edges(
+            "revalidate", nodes.route_after_revalidation, ["replan", "prepare_execution"]
+        )
+    else:
+        graph.add_conditional_edges(
+            "await_approval",
+            nodes.route_after_approval_no_revalidation,
+            ["prepare_execution", "replan", "escalate"],
+        )
+
     graph.add_edge("prepare_execution", "execute")
     graph.add_edge("execute", "verify")
     graph.add_conditional_edges("verify", nodes.route_after_verification, ["completed", "rolling_back"])
