@@ -83,7 +83,14 @@ async def await_approval(state: AgentState) -> dict[str, Any]:
         "approver_id": decision.get("approver_id"),
     }
     if decision.get("edited_action"):
-        update["proposed_action"] = decision["edited_action"]
+        new_action = decision["edited_action"]
+        update["proposed_action"] = new_action
+        # An edit changes what the fingerprint is even about (a different
+        # tool/target), so the old one can't be compared against a fresh
+        # sweep in revalidate — it would always look like drift, even with
+        # no environment change at all. Re-anchor it to the edited action
+        # against the best snapshot we have (the proposal-time sweep).
+        update["state_fingerprint"] = compute_fingerprint(state["observations"], new_action)
     return update
 
 
@@ -97,8 +104,21 @@ def route_after_approval(state: AgentState) -> str:
 
 
 async def revalidate(state: AgentState) -> dict[str, Any]:
-    drift_detected = bool(state.get("test_drift_detected", False))
-    return {"status": State.REVALIDATING.value, "drift_detected": drift_detected}
+    """Re-runs the read-only diagnostic sweep and recomputes the
+    state_fingerprint against the same proposed_action; a mismatch means
+    the world changed while this run was suspended waiting for approval,
+    so the approved action must not be blindly executed (PROJECT_SPEC.md
+    section 7)."""
+    runtime = get_runtime(AgentRuntimeContext)
+    fresh_observations = await gather_observations(runtime.context.tool_ctx)
+    fresh_fingerprint = compute_fingerprint(fresh_observations, state["proposed_action"])
+    drift_detected = fresh_fingerprint != state["state_fingerprint"]
+    return {
+        "status": State.REVALIDATING.value,
+        "observations": fresh_observations,
+        "state_fingerprint": fresh_fingerprint,
+        "drift_detected": drift_detected,
+    }
 
 
 def route_after_revalidation(state: AgentState) -> str:

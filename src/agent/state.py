@@ -1,14 +1,13 @@
 """The workflow's persisted state and the named states from the state
 machine diagram in PROJECT_SPEC.md section 4.
 
-Some nodes are still stubs, driven by test-provided hints on the initial
-input state, wherever the real logic belongs to a later phase:
-  - revalidate: real staleness detection lands in Prompt 8.
-  - execute / verify / rolling_back: real tool execution and
-    compensation lands in Prompt 9.
-diagnose and propose_action are real as of Prompt 6 (src/agent/diagnosis.py,
-src/agent/observations.py, src/revalidation/fingerprint.py). classify_risk
-is real as of Prompt 7 (src/risk/classifier.py, src/risk/policy.py).
+execute / verify / rolling_back are still stubs, driven by test-provided
+hints on the initial input state, until real tool execution and
+compensation land in Prompt 9. Every other node is real: diagnose and
+propose_action since Prompt 6 (src/agent/diagnosis.py,
+src/agent/observations.py, src/revalidation/fingerprint.py), classify_risk
+since Prompt 7 (src/risk/classifier.py, src/risk/policy.py), and
+revalidate since Prompt 8 (src/revalidation/fingerprint.py).
 """
 
 from __future__ import annotations
@@ -70,5 +69,4 @@ class AgentState(TypedDict, total=False):
 
     # Deterministic stub hints consumed by src/agent/nodes.py until the
     # real logic behind each of them is implemented (see module docstring).
-    test_drift_detected: bool | None
     test_verification_passed: bool | None

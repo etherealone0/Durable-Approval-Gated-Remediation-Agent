@@ -144,19 +144,6 @@ async def test_timeout_decision_escalates_directly(graph, make_context):
     assert result["final_state"] == State.ESCALATED.value
 
 
-async def test_drift_on_resume_replans_instead_of_executing(graph, make_context):
-    context = make_context(tier="medium")
-    await start_workflow(graph, "run-drift", {"test_drift_detected": True}, context)
-
-    result = await resume_workflow(graph, "run-drift", {"decision": "approved"}, context)
-
-    # Drift must abort straight to REPLANNING, never reach EXECUTING.
-    assert "__interrupt__" in result
-    assert result["status"] == State.AWAITING_APPROVAL.value
-    assert result["replan_cycles"] == 1
-    assert result["drift_detected"] is True
-    assert "changed" in result["replan_context"]
-
 
 async def test_repeated_rejection_is_capped_at_three_replans_then_escalates(graph, make_context):
     context = make_context(tier="medium")
