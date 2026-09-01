@@ -62,36 +62,45 @@ class HeuristicDiagnosisReasoner:
     """
 
     async def diagnose(self, observations: dict[str, Any]) -> dict[str, Any]:
-        worst_service, worst_signal, worst_score = None, "status", -1.0
-        for name, obs in observations["services"].items():
-            metrics = obs["metrics"]
-            signals = {
-                "memory_pct": metrics.get("memory_pct", 0.0),
-                "cpu_pct": metrics.get("cpu_pct", 0.0),
-                "error_rate_pct": metrics.get("error_rate", 0.0) * 100,
-            }
-            if "disk" in obs:
-                signals["disk_pct"] = obs["disk"]["used_pct"]
-            signal, score = max(signals.items(), key=lambda kv: kv[1])
-            if score > worst_score:
-                worst_service, worst_signal, worst_score = name, signal, score
-        return {
-            "summary": f"{worst_service} shows the worst signal: {worst_signal}={worst_score:.0f}",
-            "root_cause_service": worst_service,
-            "_signal": worst_signal,
-        }
+        service, signal, score = _worst_signal(observations)
+        return {"summary": f"{service} shows the worst signal: {signal}={score:.0f}"}
 
     async def propose_action(
         self, observations: dict[str, Any], diagnosis: dict[str, Any], replan_context: str | None
     ) -> dict[str, Any]:
-        target = diagnosis.get("root_cause_service") or next(iter(observations["services"]))
-        tool = "clear_cache" if diagnosis.get("_signal") == "disk_pct" else "restart_service"
+        # AgentState only ever persists the diagnosis *summary string*
+        # (src/agent/nodes.py's propose_action node passes
+        # {"summary": state["diagnosis"]}, discarding any other structure
+        # a diagnose() call returned) — so this can't read back a
+        # root_cause_service field carried over from diagnose(). It
+        # re-derives the target from `observations` directly instead,
+        # exactly like a real LLM re-reading the summary text would have
+        # to.
+        target, signal, _score = _worst_signal(observations)
+        tool = "clear_cache" if signal == "disk_pct" else "restart_service"
         return {
             "tool": tool,
             "target": target,
-            "rationale": f"heuristic reasoner: {target}'s worst signal was {diagnosis.get('_signal')}",
+            "rationale": f"heuristic reasoner: {target}'s worst signal was {signal}",
             "parameters": {},
         }
+
+
+def _worst_signal(observations: dict[str, Any]) -> tuple[str, str, float]:
+    worst_service, worst_signal, worst_score = next(iter(observations["services"])), "status", -1.0
+    for name, obs in observations["services"].items():
+        metrics = obs["metrics"]
+        signals = {
+            "memory_pct": metrics.get("memory_pct", 0.0),
+            "cpu_pct": metrics.get("cpu_pct", 0.0),
+            "error_rate_pct": metrics.get("error_rate", 0.0) * 100,
+        }
+        if "disk" in obs:
+            signals["disk_pct"] = obs["disk"]["used_pct"]
+        signal, score = max(signals.items(), key=lambda kv: kv[1])
+        if score > worst_score:
+            worst_service, worst_signal, worst_score = name, signal, score
+    return worst_service, worst_signal, worst_score
 
 
 class HeuristicRiskClassifier:
