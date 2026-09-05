@@ -114,6 +114,64 @@ def test_risk_classification_confusion_matrix_and_per_class_scores():
     assert result["per_class"]["high"]["recall"] == 0.0
 
 
+def test_risk_classification_by_tool_splits_confusion_matrix_per_tool():
+    scenarios = [
+        _scenario(id="s001", expected_risk_tier="medium"),
+        _scenario(id="s002", expected_risk_tier="low"),
+    ]
+    restart_run = _run(
+        scenario_id="s001", proposed_actions=["restart_service:service_a"], risk_tier_llm="medium"
+    )
+    cache_run = _run(
+        run_id="r2", scenario_id="s002", proposed_actions=["clear_cache:service_c"], risk_tier_llm="low"
+    )
+
+    result = metrics.risk_classification_precision_recall_f1_by_tool([restart_run, cache_run], scenarios)
+
+    assert set(result) == {"restart_service", "clear_cache"}
+    assert result["restart_service"]["confusion_matrix"]["medium"]["medium"] == 1
+    assert result["restart_service"]["total_classified"] == 1
+    assert result["clear_cache"]["confusion_matrix"]["low"]["low"] == 1
+    assert result["clear_cache"]["total_classified"] == 1
+
+
+def test_risk_classification_by_tool_uses_the_last_proposed_action():
+    # A run that replanned after an invalid/rejected first proposal: the
+    # tool that was actually risk-classified (matching risk_tier_llm) is
+    # the last one proposed, not the first.
+    scenarios = [_scenario(id="s001", expected_risk_tier="medium")]
+    run = _run(
+        scenario_id="s001",
+        proposed_actions=["clear_cache:service_a", "restart_service:service_a"],
+        risk_tier_llm="medium",
+    )
+
+    result = metrics.risk_classification_precision_recall_f1_by_tool([run], scenarios)
+
+    assert set(result) == {"restart_service"}
+
+
+def test_risk_classification_by_tool_skips_runs_with_no_proposed_action():
+    scenarios = [_scenario(id="s001")]
+    run = _run(scenario_id="s001", proposed_actions=[])
+
+    result = metrics.risk_classification_precision_recall_f1_by_tool([run], scenarios)
+
+    assert result == {}
+
+
+def test_redundancy_floor_override_rate_counts_flagged_runs():
+    floored = _run(redundancy_floor_applied=True)
+    not_floored = _run(run_id="r2", redundancy_floor_applied=False)
+    unset = _run(run_id="r3")
+
+    assert metrics.redundancy_floor_override_rate([floored, not_floored, unset]) == pytest.approx(100 / 3)
+
+
+def test_redundancy_floor_override_rate_is_none_with_no_runs():
+    assert metrics.redundancy_floor_override_rate([]) is None
+
+
 def test_state_recovery_correctness_over_chaos_results():
     results = [{"passed": True}, {"passed": True}, {"passed": False}]
     assert metrics.state_recovery_correctness(results) == pytest.approx(200 / 3)

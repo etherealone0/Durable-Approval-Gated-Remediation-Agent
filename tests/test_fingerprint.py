@@ -5,7 +5,7 @@ drift, but a relevant change always does."""
 
 import copy
 
-from src.revalidation.fingerprint import compute_fingerprint
+from src.revalidation.fingerprint import compute_fingerprint, validate_proposal
 
 BASE_OBSERVATIONS = {
     "services": {
@@ -115,3 +115,26 @@ def test_delete_records_fingerprint_goes_to_empty_when_rows_already_deleted():
     assert compute_fingerprint(BASE_OBSERVATIONS, "delete_records:cache_entry") != compute_fingerprint(
         already_deleted, "delete_records:cache_entry"
     )
+
+
+def test_validate_proposal_accepts_real_actions():
+    assert validate_proposal(BASE_OBSERVATIONS, "restart_service:service_a") is None
+    assert validate_proposal(BASE_OBSERVATIONS, "clear_cache:service_c") is None
+    assert validate_proposal(BASE_OBSERVATIONS, "delete_records:cache_entry") is None
+
+
+def test_validate_proposal_rejects_unknown_service():
+    assert validate_proposal(BASE_OBSERVATIONS, "restart_service:service_z") is not None
+
+
+def test_validate_proposal_rejects_unknown_tool():
+    assert validate_proposal(BASE_OBSERVATIONS, "reboot_the_datacenter:service_a") is not None
+
+
+def test_validate_proposal_rejects_unknown_record_kind():
+    assert validate_proposal(BASE_OBSERVATIONS, "delete_records:widget") is not None
+
+
+def test_validate_proposal_rejects_clear_cache_on_service_without_disk():
+    # service_a has no "disk" observation surface in BASE_OBSERVATIONS.
+    assert validate_proposal(BASE_OBSERVATIONS, "clear_cache:service_a") is not None

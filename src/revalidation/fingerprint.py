@@ -15,6 +15,8 @@ import hashlib
 import json
 from typing import Any
 
+from src.tools.registry import KNOWN_TOOLS, RECORD_KINDS
+
 
 def _service_fields(observations: dict[str, Any], service: str, fields: list[str]) -> dict[str, Any]:
     metrics = observations["services"][service]["metrics"]
@@ -47,6 +49,29 @@ def relevant_fields(observations: dict[str, Any], tool: str, target: str) -> dic
         return {"kind": target, "ids": matching}
 
     raise ValueError(f"unknown tool {tool!r}")
+
+
+def validate_proposal(observations: dict[str, Any], proposed_action: str) -> str | None:
+    """None if `proposed_action` is grounded in the real environment (a
+    real service/record kind that the tool actually applies to);
+    otherwise a human-readable reason it isn't, for replan_context.
+    Nothing in ActionProposalOutput's schema stops an LLM reasoner from
+    proposing a target that doesn't exist or a tool that doesn't apply to
+    it (e.g. clear_cache on a service with no disk surface) — this is the
+    one place that catches it before it reaches compute_fingerprint's
+    unguarded dict lookups."""
+    tool, target = proposed_action.split(":", 1)
+    if tool not in KNOWN_TOOLS:
+        return f"{tool!r} is not a known tool"
+    if tool == "delete_records":
+        if target not in RECORD_KINDS:
+            return f"{target!r} is not a known record kind"
+        return None
+    if target not in observations["services"]:
+        return f"{target!r} is not a known service"
+    if tool == "clear_cache" and "disk" not in observations["services"][target]:
+        return f"{target!r} has no disk surface; clear_cache doesn't apply to it"
+    return None
 
 
 def compute_fingerprint(observations: dict[str, Any], proposed_action: str) -> str:

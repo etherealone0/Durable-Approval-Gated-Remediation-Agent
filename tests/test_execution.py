@@ -112,7 +112,9 @@ async def test_deterministic_key_prevents_double_apply_across_a_simulated_replay
 
 
 async def test_end_to_end_low_risk_run_executes_and_verifies_for_real(graph):
-    ctx = build_tool_ctx()
+    # Redundant replicas so "low" isn't floored to "medium" by
+    # src/risk/policy.py's redundancy floor.
+    ctx = build_tool_ctx(replicas={"service_b": 2})
     await ctx.client("service_b").post("/admin/fault", json={"type": FaultType.MEMORY_LEAK.value, "rate": FaultRate.HIGH.value})
     context = AgentRuntimeContext(
         tool_ctx=ctx,

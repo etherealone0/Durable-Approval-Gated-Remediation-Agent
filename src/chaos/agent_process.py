@@ -56,7 +56,13 @@ class _ScriptedRiskClassifier:
     def __init__(self, tier: str) -> None:
         self._tier = tier
 
-    async def classify(self, proposed_action: str, diagnosis: str, rationale: str | None) -> dict[str, Any]:
+    async def classify(
+        self,
+        proposed_action: str,
+        diagnosis: str,
+        rationale: str | None,
+        situational: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         return {
             "tier": self._tier,
             "reversibility": "n/a",

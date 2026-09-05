@@ -95,7 +95,15 @@ itself — check every service's health before blaming the one with the loudest 
 symptom.
 - A database row's name resembling the symptom (e.g. a "cache_entry" row when a \
 service's local disk cache is full) does not mean that row is the cause — a \
-service's disk_pct is about its local disk, not the database.
+service's disk_pct is about its local disk, not the database. A row existing in \
+the database is not evidence on its own; only propose delete_records when a \
+specific row's own data (an actual stale/expired value visible in \
+query_db_readonly's results) is what a metric or log line explicitly implicates.
+- Elevated memory_pct, cpu_pct, or error_rate on a service is caused by that \
+service's own process — a database row cannot cause a memory leak, a CPU spike, \
+or an elevated error rate, no matter how suggestively it's named. Those symptoms \
+are always fixed by restart_service/scale_service (or rollback_deployment if \
+deployed_version actually changed), never delete_records.
 - deployed_version only matters if it actually changed something; don't assume a \
 bad deploy just because errors exist.
 
@@ -117,6 +125,7 @@ class AnthropicDiagnosisReasoner:
     def __init__(self, model: str = "claude-sonnet-5") -> None:
         from langchain_anthropic import ChatAnthropic
 
+        self.model = model
         base = ChatAnthropic(model=model)
         self._diagnosis_model = base.with_structured_output(DiagnosisOutput)
         self._proposal_model = base.with_structured_output(ActionProposalOutput)
@@ -134,4 +143,105 @@ class AnthropicDiagnosisReasoner:
             human["why_you_are_replanning"] = replan_context
         messages = [("system", PROPOSAL_SYSTEM_PROMPT), ("human", _report(human))]
         result = await self._proposal_model.ainvoke(messages)
+        return result.model_dump()
+
+
+class _OpenAIActionProposal(BaseModel):
+    """Mirrors ActionProposalOutput for OpenAI's strict structured-output
+    mode, which rejects an open-ended dict (`parameters: dict[str, Any]`
+    needs `additionalProperties: false`, incompatible with arbitrary
+    keys) — parameters travels as a JSON string instead and gets decoded
+    back into a dict after the call, so the external contract this
+    reasoner returns is identical to every other one."""
+
+    tool: str = Field(description=f"One of: {sorted(KNOWN_TOOLS)}")
+    target: str = Field(
+        description="A service name for every tool except delete_records, where it's a record kind."
+    )
+    rationale: str = Field(description="Why this action addresses the root cause, not just the symptom.")
+    parameters_json: str = Field(
+        default="{}",
+        description='JSON-encoded object for extra args the tool needs beyond target: '
+        '{"replicas": int} for scale_service, {"key": str, "value": str} for apply_config_change. '
+        '"{}" for every other tool.',
+    )
+
+
+class OpenAIDiagnosisReasoner:
+    """Stand-in for AnthropicDiagnosisReasoner backed by the OpenAI API
+    (structured outputs via chat.completions.parse) instead of Anthropic's,
+    for environments with an OpenAI key but no ANTHROPIC_API_KEY."""
+
+    def __init__(self, model: str = "gpt-4o-mini", api_key: str | None = None) -> None:
+        from openai import AsyncOpenAI
+
+        self.model = model
+        self._client = AsyncOpenAI(api_key=api_key)
+
+    async def diagnose(self, observations: dict[str, Any]) -> dict[str, Any]:
+        response = await self._client.chat.completions.parse(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": DIAGNOSIS_SYSTEM_PROMPT},
+                {"role": "user", "content": _report(observations)},
+            ],
+            response_format=DiagnosisOutput,
+        )
+        return response.choices[0].message.parsed.model_dump()
+
+    async def propose_action(
+        self, observations: dict[str, Any], diagnosis: dict[str, Any], replan_context: str | None
+    ) -> dict[str, Any]:
+        human = {"observations": observations, "diagnosis": diagnosis}
+        if replan_context:
+            human["why_you_are_replanning"] = replan_context
+        response = await self._client.chat.completions.parse(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": PROPOSAL_SYSTEM_PROMPT},
+                {"role": "user", "content": _report(human)},
+            ],
+            response_format=_OpenAIActionProposal,
+        )
+        parsed = response.choices[0].message.parsed
+        try:
+            parameters = json.loads(parsed.parameters_json)
+        except json.JSONDecodeError:
+            parameters = {}
+        return {
+            "tool": parsed.tool,
+            "target": parsed.target,
+            "rationale": parsed.rationale,
+            "parameters": parameters,
+        }
+
+
+class OllamaDiagnosisReasoner:
+    """Free, local stand-in for AnthropicDiagnosisReasoner: same prompts
+    and structured-output contract, backed by an open-weight model served
+    by Ollama (https://ollama.com) instead of a paid API."""
+
+    def __init__(self, model: str = "llama3.1:8b", base_url: str = "http://localhost:11434") -> None:
+        self.model = model
+        self.base_url = base_url
+
+    async def diagnose(self, observations: dict[str, Any]) -> dict[str, Any]:
+        from src.llm.ollama_client import structured_chat
+
+        result = await structured_chat(
+            self.model, DIAGNOSIS_SYSTEM_PROMPT, _report(observations), DiagnosisOutput, base_url=self.base_url
+        )
+        return result.model_dump()
+
+    async def propose_action(
+        self, observations: dict[str, Any], diagnosis: dict[str, Any], replan_context: str | None
+    ) -> dict[str, Any]:
+        from src.llm.ollama_client import structured_chat
+
+        human = {"observations": observations, "diagnosis": diagnosis}
+        if replan_context:
+            human["why_you_are_replanning"] = replan_context
+        result = await structured_chat(
+            self.model, PROPOSAL_SYSTEM_PROMPT, _report(human), ActionProposalOutput, base_url=self.base_url
+        )
         return result.model_dump()

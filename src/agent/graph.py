@@ -52,7 +52,9 @@ def build_graph(checkpointer, *, revalidate: bool = True) -> CompiledStateGraph:
 
     graph.add_edge(START, "diagnose")
     graph.add_edge("diagnose", "propose_action")
-    graph.add_edge("propose_action", "classify_risk")
+    graph.add_conditional_edges(
+        "propose_action", nodes.route_after_proposal, ["classify_risk", "replan"]
+    )
     graph.add_conditional_edges(
         "classify_risk", nodes.route_after_risk_classification, ["prepare_execution", "mark_awaiting_approval"]
     )

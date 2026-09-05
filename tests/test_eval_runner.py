@@ -43,6 +43,10 @@ async def test_low_risk_run_executes_without_suspension():
         reasoner=ScriptedReasoner(tool="restart_service", target="service_a"),
         risk_classifier=ScriptedRiskClassifier(tier="low"),
         simulated_approval_wait_seconds=0,
+        # Redundant replicas so "low" isn't floored to "medium" by
+        # src/risk/policy.py's redundancy floor — this test is about the
+        # low-risk-executes-autonomously path, not the floor.
+        initial_replicas={"service_a": 2},
     )
 
     assert record["final_state"] == "COMPLETED"

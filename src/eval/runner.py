@@ -9,10 +9,12 @@ in one of the three required ablation configurations:
   (src/agent/graph.py's `revalidate=False`).
 
 Uses AnthropicDiagnosisReasoner/AnthropicRiskClassifier when
-ANTHROPIC_API_KEY is set, and falls back to a ground-truth-free heuristic
-reasoner/classifier otherwise so the suite can still run end-to-end without
-an API key (src/eval/run_suite.py reports which one produced a given
-results file).
+ANTHROPIC_API_KEY is set; else OpenAIDiagnosisReasoner/OpenAIRiskClassifier
+when OPEN_AI_API_KEY is set; else OllamaDiagnosisReasoner/OllamaRiskClassifier
+(a free, local, open-weight stand-in) when OLLAMA_MODEL is set; and falls
+back to a ground-truth-free heuristic reasoner/classifier otherwise so the
+suite can still run end-to-end without any of them (src/eval/run_suite.py
+reports which one produced a given results file).
 """
 
 from __future__ import annotations
@@ -27,13 +29,18 @@ from typing import Any, Literal
 import httpx
 from langgraph.checkpoint.memory import InMemorySaver
 
-from src.agent.diagnosis import AnthropicDiagnosisReasoner, DiagnosisReasoner
+from src.agent.diagnosis import (
+    AnthropicDiagnosisReasoner,
+    DiagnosisReasoner,
+    OllamaDiagnosisReasoner,
+    OpenAIDiagnosisReasoner,
+)
 from src.agent.graph import build_graph, resume_workflow, start_workflow
 from src.agent.runtime import AgentRuntimeContext
 from src.audit.store import InMemoryAuditStore
 from src.env.fault_injector import FaultInjector
 from src.env.mock_service.app import create_app
-from src.risk.classifier import AnthropicRiskClassifier, RiskClassifier
+from src.risk.classifier import AnthropicRiskClassifier, OllamaRiskClassifier, OpenAIRiskClassifier, RiskClassifier
 from src.tools.context import InMemoryRecordsRepository, ToolContext
 
 AblationMode = Literal["full", "no_durability", "no_revalidation"]
@@ -119,7 +126,13 @@ class HeuristicRiskClassifier:
         "delete_records": "high",
     }
 
-    async def classify(self, proposed_action: str, diagnosis: str, rationale: str | None) -> dict[str, Any]:
+    async def classify(
+        self,
+        proposed_action: str,
+        diagnosis: str,
+        rationale: str | None,
+        situational: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         tool = proposed_action.split(":", 1)[0]
         tier = self._TIERS.get(tool, "medium")
         return {
@@ -131,16 +144,47 @@ class HeuristicRiskClassifier:
         }
 
 
+DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+
+
 def default_reasoner() -> DiagnosisReasoner:
     if os.environ.get("ANTHROPIC_API_KEY"):
         return AnthropicDiagnosisReasoner()
+    if os.environ.get("OPEN_AI_API_KEY"):
+        return OpenAIDiagnosisReasoner(
+            model=os.environ.get("OPENAI_MODEL", DEFAULT_OPENAI_MODEL), api_key=os.environ["OPEN_AI_API_KEY"]
+        )
+    if os.environ.get("OLLAMA_MODEL"):
+        return OllamaDiagnosisReasoner(model=os.environ["OLLAMA_MODEL"])
     return HeuristicDiagnosisReasoner()
 
 
 def default_risk_classifier() -> RiskClassifier:
     if os.environ.get("ANTHROPIC_API_KEY"):
         return AnthropicRiskClassifier()
+    if os.environ.get("OPEN_AI_API_KEY"):
+        return OpenAIRiskClassifier(
+            model=os.environ.get("OPENAI_MODEL", DEFAULT_OPENAI_MODEL), api_key=os.environ["OPEN_AI_API_KEY"]
+        )
+    if os.environ.get("OLLAMA_MODEL"):
+        return OllamaRiskClassifier(model=os.environ["OLLAMA_MODEL"])
     return HeuristicRiskClassifier()
+
+
+def _classifier_backend_label(risk_classifier: RiskClassifier) -> str:
+    """Which concrete risk-classifier implementation produced a run's
+    risk_tier_llm, recorded per-run in results/runs.jsonl (Part 1's audit
+    finding: previously the only way to tell heuristic-fallback numbers
+    apart from real-model ones was reading rationale text by hand)."""
+    if isinstance(risk_classifier, OllamaRiskClassifier):
+        return f"ollama:{risk_classifier.model}"
+    if isinstance(risk_classifier, OpenAIRiskClassifier):
+        return f"openai:{risk_classifier.model}"
+    if isinstance(risk_classifier, AnthropicRiskClassifier):
+        return f"anthropic:{risk_classifier.model}"
+    if isinstance(risk_classifier, HeuristicRiskClassifier):
+        return "heuristic-fallback"
+    return type(risk_classifier).__name__
 
 
 def _approx_tokens(*parts: Any) -> int:
@@ -179,21 +223,32 @@ class _InstrumentedRiskClassifier:
         self.llm_calls = 0
         self.total_tokens = 0
 
-    async def classify(self, proposed_action: str, diagnosis: str, rationale: str | None) -> dict[str, Any]:
+    async def classify(
+        self,
+        proposed_action: str,
+        diagnosis: str,
+        rationale: str | None,
+        situational: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         self.llm_calls += 1
-        result = await self._inner.classify(proposed_action, diagnosis, rationale)
-        self.total_tokens += _approx_tokens(proposed_action, diagnosis, rationale) + _approx_tokens(result)
+        result = await self._inner.classify(proposed_action, diagnosis, rationale, situational=situational)
+        self.total_tokens += _approx_tokens(proposed_action, diagnosis, rationale, situational) + _approx_tokens(
+            result
+        )
         return result
 
 
-def build_sandbox(service_urls: dict[str, str] | None) -> tuple[dict[str, httpx.AsyncClient], ToolContext]:
+def build_sandbox(
+    service_urls: dict[str, str] | None, initial_replicas: dict[str, int] | None = None
+) -> tuple[dict[str, httpx.AsyncClient], ToolContext]:
     if service_urls:
         clients = {name: httpx.AsyncClient(base_url=url) for name, url in service_urls.items()}
     else:
+        replicas = initial_replicas or {}
         apps = {
-            "service_a": create_app(name="service_a", has_disk=False),
-            "service_b": create_app(name="service_b", has_disk=False),
-            "service_c": create_app(name="service_c", has_disk=True),
+            "service_a": create_app(name="service_a", has_disk=False, replicas=replicas.get("service_a", 1)),
+            "service_b": create_app(name="service_b", has_disk=False, replicas=replicas.get("service_b", 1)),
+            "service_c": create_app(name="service_c", has_disk=True, replicas=replicas.get("service_c", 1)),
         }
         clients = {
             name: httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=f"http://{name}")
@@ -232,13 +287,17 @@ async def run_scenario(
     service_urls: dict[str, str] | None = None,
     simulated_approval_wait_seconds: float = 2.0,
     approver_id: str = "eval-harness",
+    initial_replicas: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     """Runs one scenario start-to-finish and returns a runs.jsonl-shaped
     record. A suspended run is approved by this same harness after a short
     simulated wait (simulated_approval_wait_seconds) rather than a real
     human — long enough for compute_idle_ratio to show a real gap between
-    wall-clock and active-compute time without the suite taking hours."""
-    clients, tool_ctx = build_sandbox(service_urls)
+    wall-clock and active-compute time without the suite taking hours.
+    `initial_replicas` overrides a service's starting replica count from
+    the mock's default of 1 (no test scenario currently needs this; it
+    exists for tests exercising src/risk/policy.py's redundancy floor)."""
+    clients, tool_ctx = build_sandbox(service_urls, initial_replicas)
     try:
         await FaultInjector(clients).inject(
             scenario["fault_injection"]["service"],
@@ -246,8 +305,9 @@ async def run_scenario(
             scenario["fault_injection"]["rate"],
         )
 
+        resolved_risk_classifier = risk_classifier or default_risk_classifier()
         instrumented_reasoner = _InstrumentedReasoner(reasoner or default_reasoner())
-        instrumented_classifier = _InstrumentedRiskClassifier(risk_classifier or default_risk_classifier())
+        instrumented_classifier = _InstrumentedRiskClassifier(resolved_risk_classifier)
         audit_store = InMemoryAuditStore()
         context = AgentRuntimeContext(
             tool_ctx=tool_ctx,
@@ -318,6 +378,8 @@ async def run_scenario(
             "proposed_actions": proposed_actions,
             "risk_tier_llm": result.get("risk_tier_llm"),
             "risk_tier_final": result.get("risk_tier_final"),
+            "classifier_backend": _classifier_backend_label(resolved_risk_classifier),
+            "redundancy_floor_applied": result.get("redundancy_floor_applied"),
             "approval_wait_seconds": approval_wait_seconds,
             "time_to_resume_ms": time_to_resume_ms,
             "revalidation_triggered": mode != "no_revalidation" and first_suspension,

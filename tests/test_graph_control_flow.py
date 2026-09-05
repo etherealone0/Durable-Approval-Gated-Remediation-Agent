@@ -22,9 +22,14 @@ def graph():
 
 @pytest.fixture
 def make_context():
-    def _make(tier: str = "low", tool: str = "restart_service", target: str = "service_a"):
+    def _make(
+        tier: str = "low",
+        tool: str = "restart_service",
+        target: str = "service_a",
+        replicas: dict[str, int] | None = None,
+    ):
         return AgentRuntimeContext(
-            tool_ctx=build_tool_ctx(),
+            tool_ctx=build_tool_ctx(replicas=replicas),
             reasoner=ScriptedReasoner(tool=tool, target=target),
             risk_classifier=ScriptedRiskClassifier(tier),
         )
@@ -33,7 +38,9 @@ def make_context():
 
 
 async def test_low_risk_executes_autonomously_without_suspending(graph, make_context):
-    context = make_context(tier="low")
+    # Redundant replicas so "low" isn't floored to "medium" by
+    # src/risk/policy.py's redundancy floor.
+    context = make_context(tier="low", replicas={"service_a": 2})
     result = await start_workflow(graph, "run-low", {}, context)
 
     assert "__interrupt__" not in result
@@ -47,7 +54,7 @@ async def test_low_risk_executes_autonomously_without_suspending(graph, make_con
 
 
 async def test_every_named_state_is_persisted_in_order_for_the_happy_path(graph, make_context):
-    await start_workflow(graph, "run-history", {}, make_context(tier="low"))
+    await start_workflow(graph, "run-history", {}, make_context(tier="low", replicas={"service_a": 2}))
 
     history = [s async for s in graph.aget_state_history({"configurable": {"thread_id": "run-history"}})]
     statuses = [h.values.get("status") for h in reversed(history) if h.values.get("status")]
@@ -77,6 +84,22 @@ async def test_medium_risk_suspends_then_resumes_on_approval(graph, make_context
     assert result["status"] == State.COMPLETED.value
     assert result["approval_decision"] == "approved"
     assert result["approver_id"] == "alice"
+
+
+async def test_invalid_proposal_replans_instead_of_crashing(graph, make_context):
+    # service_a has no disk surface (build_tool_ctx's has_disk=False), so
+    # clear_cache never applies to it — this must route to replan rather
+    # than crash compute_fingerprint with a raw KeyError, and after
+    # exhausting MAX_REPLAN_CYCLES retries on a reasoner that never
+    # changes its answer, escalate rather than loop forever.
+    context = make_context(tier="low", tool="clear_cache", target="service_a")
+
+    result = await start_workflow(graph, "run-invalid-proposal", {}, context)
+
+    assert "__interrupt__" not in result
+    assert result["status"] == State.ESCALATED.value
+    assert result["final_state"] == State.ESCALATED.value
+    assert context.reasoner.propose_action_calls[-1] is not None  # replan_context was passed back in
 
 
 async def test_deterministic_policy_overrides_llm_tier_for_delete_records(graph, make_context):
@@ -166,7 +189,9 @@ async def test_verification_failure_rolls_back_and_eventually_escalates(graph):
     # restart_service never clears disk usage, so restarting a
     # permanently disk-full service fails verification every attempt,
     # exercising the rollback -> replan loop for real up to the cap.
-    ctx = build_tool_ctx()
+    # Redundant replicas so "low" isn't floored to "medium" by
+    # src/risk/policy.py's redundancy floor.
+    ctx = build_tool_ctx(replicas={"service_c": 2})
     await ctx.client("service_c").post("/admin/fault", json={"type": "disk_full", "rate": "high"})
     context = AgentRuntimeContext(
         tool_ctx=ctx,

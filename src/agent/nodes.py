@@ -15,8 +15,8 @@ from src.agent.observations import gather_observations
 from src.agent.runtime import AgentRuntimeContext
 from src.agent.state import MAX_REPLAN_CYCLES, AgentState, State
 from src.chaos.hooks import mark
-from src.revalidation.fingerprint import compute_fingerprint
-from src.risk.policy import apply_policy
+from src.revalidation.fingerprint import compute_fingerprint, validate_proposal
+from src.risk.policy import apply_policy, situational_features
 
 
 async def diagnose(state: AgentState) -> dict[str, Any]:
@@ -36,29 +36,43 @@ async def propose_action(state: AgentState) -> dict[str, Any]:
         state["observations"], {"summary": state["diagnosis"]}, state.get("replan_context")
     )
     proposed_action = f"{action['tool']}:{action['target']}"
-    fingerprint = compute_fingerprint(state["observations"], proposed_action)
+    invalid_reason = validate_proposal(state["observations"], proposed_action)
+    fingerprint = None if invalid_reason else compute_fingerprint(state["observations"], proposed_action)
     return {
         "status": State.ACTION_PROPOSED.value,
         "proposed_action": proposed_action,
         "action_parameters": action.get("parameters", {}),
         "action_rationale": action["rationale"],
         "state_fingerprint": fingerprint,
+        "invalid_proposal_reason": invalid_reason,
     }
+
+
+def route_after_proposal(state: AgentState) -> str:
+    return "replan" if state.get("invalid_proposal_reason") else "classify_risk"
 
 
 async def classify_risk(state: AgentState) -> dict[str, Any]:
     runtime = get_runtime(AgentRuntimeContext)
     tool, _target = state["proposed_action"].split(":", 1)
+    situational = situational_features(state["observations"], state["proposed_action"])
     result = await runtime.context.risk_classifier.classify(
-        state["proposed_action"], state["diagnosis"], state.get("action_rationale")
+        state["proposed_action"], state["diagnosis"], state.get("action_rationale"), situational=situational
     )
     llm_tier = result["tier"]
-    final_tier = apply_policy(tool, llm_tier)
+    final_tier = apply_policy(tool, llm_tier, situational=situational)
+    redundancy_floor_applied = (
+        llm_tier == "low"
+        and final_tier == "medium"
+        and situational is not None
+        and situational.get("has_redundant_replica") is False
+    )
     return {
         "status": State.RISK_CLASSIFIED.value,
         "risk_tier_llm": llm_tier,
         "risk_tier_final": final_tier,
         "risk_rationale": result["rationale"],
+        "redundancy_floor_applied": redundancy_floor_applied,
     }
 
 
@@ -194,6 +208,8 @@ async def rolled_back(state: AgentState) -> dict[str, Any]:
 
 def _replan_reason(state: AgentState) -> str:
     action = state.get("proposed_action")
+    if state.get("invalid_proposal_reason"):
+        return f"{action} is not valid: {state['invalid_proposal_reason']}; propose a real action instead"
     if state.get("approval_decision") == "rejected":
         return f"a human reviewer rejected the proposed action ({action}); propose a different one"
     if state.get("drift_detected"):

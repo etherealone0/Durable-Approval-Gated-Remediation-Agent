@@ -52,7 +52,13 @@ class _LoadTestReasoner:
 
 
 class _LoadTestRiskClassifier:
-    async def classify(self, proposed_action: str, diagnosis: str, rationale: str | None) -> dict[str, Any]:
+    async def classify(
+        self,
+        proposed_action: str,
+        diagnosis: str,
+        rationale: str | None,
+        situational: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         return {
             "tier": "medium",
             "reversibility": "stub",

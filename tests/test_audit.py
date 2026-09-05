@@ -17,9 +17,9 @@ def graph():
     return build_graph(InMemorySaver())
 
 
-def make_context(tier="low", tool="restart_service", target="service_a"):
+def make_context(tier="low", tool="restart_service", target="service_a", replicas=None):
     return AgentRuntimeContext(
-        tool_ctx=build_tool_ctx(),
+        tool_ctx=build_tool_ctx(replicas=replicas),
         reasoner=ScriptedReasoner(tool=tool, target=target),
         risk_classifier=ScriptedRiskClassifier(tier),
         audit_store=InMemoryAuditStore(),
@@ -27,7 +27,7 @@ def make_context(tier="low", tool="restart_service", target="service_a"):
 
 
 async def test_low_risk_run_logs_every_transition(graph):
-    context = make_context(tier="low")
+    context = make_context(tier="low", replicas={"service_a": 2})
     await start_workflow(graph, "run-audit-low", {}, context)
 
     records = await context.audit_store.get_run("run-audit-low")
@@ -48,7 +48,7 @@ async def test_low_risk_run_logs_every_transition(graph):
 
 
 async def test_audit_captures_risk_tier_and_action_on_relevant_records(graph):
-    context = make_context(tier="low")
+    context = make_context(tier="low", replicas={"service_a": 2})
     await start_workflow(graph, "run-audit-fields", {}, context)
 
     records = await context.audit_store.get_run("run-audit-fields")

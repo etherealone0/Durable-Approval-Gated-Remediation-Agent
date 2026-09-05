@@ -4,7 +4,7 @@ A durable, human-in-the-loop, approval-gated infrastructure remediation agent. I
 
 The numbers below come from the actual test suite and evaluation harness in this repo, not from hand-picked examples.
 
-> **Reproducing these numbers**: this build environment has no Docker daemon and no `ANTHROPIC_API_KEY`, so the tables below were produced by `python -m src.eval.run_suite` running against the **heuristic fallback reasoner** (`src/eval/runner.py`) — a rule-based stand-in that inspects the same read-only sweep an LLM would but does no real reasoning, and `InMemorySaver` instead of a live Postgres checkpointer. It's there so the harness runs end-to-end without external services; it is not a substitute for the real diagnostic quality of `AnthropicDiagnosisReasoner` + `AnthropicRiskClassifier`, which activate automatically once `ANTHROPIC_API_KEY` is set. Anywhere a number reflects the fallback's own limits rather than the system's, it's called out inline.
+> **Reproducing these numbers**: this build environment has no Docker daemon, so the tables below use `InMemorySaver` instead of a live Postgres checkpointer, but they *are* produced against a real model — `python -m src.eval.run_suite` running `OpenAIDiagnosisReasoner`/`OpenAIRiskClassifier` (`src/agent/diagnosis.py`, `src/risk/classifier.py`) against `gpt-4o-mini`, activated automatically once `OPEN_AI_API_KEY` is set. `AnthropicDiagnosisReasoner`/`AnthropicRiskClassifier` take priority if `ANTHROPIC_API_KEY` is set instead; `OllamaDiagnosisReasoner`/`OllamaRiskClassifier` — a free, local, open-weight stand-in — activate via `OLLAMA_MODEL` if neither key is present; a rule-based heuristic fallback with no real reasoning (`src/eval/runner.py`) is the last resort so the harness still runs end-to-end with no external service at all. A full run against a local model (`llama3.1:8b`, then `llama3.2:3b`) was attempted first but didn't complete in this environment — the host had well under 2GB of free RAM under load from unrelated applications, which stalled and eventually evicted the model mid-run regardless of model size, an environment constraint, not a code issue — so the numbers below come from the OpenAI path instead. Every run record carries a `classifier_backend` field (`heuristic-fallback` / `anthropic:<model>` / `openai:<model>` / `ollama:<model>`) so which one produced a given number is never ambiguous. Anywhere a number reflects a specific model's own limits rather than the system's, it's called out inline — see "Known limitations" below for two such cases found by moving off the heuristic fallback.
 
 ## Results at a glance (50-scenario suite, `full` config)
 
@@ -12,31 +12,39 @@ The numbers below come from the actual test suite and evaluation harness in this
 
 | Metric | Result |
 |---|---|
-| Unsafe action prevention (overall) | 100% (50/50) |
+| Unsafe action prevention (overall) | 92% (46/50)¹ |
 | Unsafe action prevention (trap scenarios) | 100% (8/8) |
 | Approval gate compliance | 100% — every medium/high-risk action suspended for approval |
-| Policy override rate | 0%¹ |
+| Policy override rate | 6%² |
+| Redundancy floor override rate (of which, above) | 0%³ |
 
-¹ The heuristic fallback never proposes `delete_records`/`rollback_deployment`, so the deterministic high-risk override never has an LLM tier to overrule. `src/risk/policy.py` and its forced-high behavior are covered directly by unit tests (`tests/test_risk_policy.py`), independent of this suite run.
+¹ Trap scenarios — the 8 specifically designed to tempt the wrong action — are 100% safe. The 4 misses are all on `low_risk`-category scenarios, all the same failure mode: `gpt-4o-mini` proposing `delete_records:cache_entry` for a fault that has nothing to do with the database. See "Known limitations" below — this is a real, only-partially-fixed model limitation, not hidden.
+² `delete_records`/`rollback_deployment` are always forced to `high` regardless of what the classifier says (`FORCED_HIGH_TOOLS` in `src/risk/policy.py`); this is how often that override actually had an LLM tier to overrule in this run. Independent of this suite run, the override itself is covered directly by unit tests (`tests/test_risk_policy.py`).
+³ `src/risk/policy.py`'s deterministic floor now only fires when a target has no redundant replica **and** is being acted on for at least a second time this run (thrashing) — see "Known limitations" below for why it no longer fires on redundancy alone. It never fired in this run because no run needed a second attempt on a non-redundant target; that's expected, not a regression — the override rate the metric is designed to catch requires the (rare) thrashing case to occur first.
 
 **Durability** — the distinctive claims.
 
 | Metric | Result |
 |---|---|
-| Time to resume (decision API call → leaving `AWAITING_APPROVAL`) | p50 31 ms · p95 41 ms · p99 44 ms |
-| Compute idle ratio (avg. across all suspended runs) | 0.945 |
+| Time to resume (decision API call → leaving `AWAITING_APPROVAL`) | p50 37 ms · p95 2895 ms · p99 3059 ms⁴ |
+| Compute idle ratio (avg. across all suspended runs) | 0.024⁵ |
 | Rollback success rate | 100% |
-| Cost per run | ~1,003 tokens · 3.2 LLM calls avg (heuristic-reasoner token counts are an estimate, not billing-accurate — see `src/eval/runner.py`) |
+| Cost per run | 1,399 tokens · 3.38 LLM calls avg · **$0.0084/run** (real OpenAI billing, not an estimate) |
+
+⁴ p95/p99 now reflect real OpenAI API latency on the replan path, not an instant heuristic call — expected once a real model is in the loop.
+⁵ Not comparable to the idle-ratio curve below — this run used a 0.1s simulated approval wait (fast iteration), so a several-second LLM call dominates wall-clock time. See the curve below for idle ratio as a function of wait duration; at any realistic approval wait (seconds to hours) it still rounds to ~1.0.
 
 **Correctness**
 
 | Metric | Result |
 |---|---|
-| Diagnosis accuracy (first proposed action ∈ `acceptable_actions`) | 80% |
+| Diagnosis accuracy (first proposed action ∈ `acceptable_actions`) | 78% |
 | Remediation success rate (reached `COMPLETED` + verified) | 98% |
-| Staleness detection rate | 57.1% (4/7) |
+| Staleness detection rate | 85.7% (6/7)⁶ |
 | False drift rate (drift flagged when nothing material changed) | 0% |
 | Audit completeness (full run reconstructable from the log alone) | 100% |
+
+⁶ Up from 57.1% (4/7) on the original heuristic-fallback run, and confirmed to hold — same 85.7% — against a real model (`gpt-4o-mini`), not just the heuristic. See "Known limitations" below for the full root-cause trace and for the one remaining miss.
 
 ## The revalidation ablation — the strongest single result
 
@@ -44,13 +52,37 @@ Every staleness scenario in the suite deliberately mutates the environment *whil
 
 | Config | Staleness detection rate | Staleness scenarios executed despite drift |
 |---|---|---|
-| `full` (durable + revalidation) | 57.1% | **3 / 7** |
-| `no_durability` (in-memory checkpoint, revalidation on) | 57.1% | **3 / 7** |
+| `full` (durable + revalidation) | 85.7% | **1 / 7** |
+| `no_durability` (in-memory checkpoint, revalidation on) | 85.7% | **1 / 7** |
 | `no_revalidation` (approved actions execute blindly) | 0.0% | **7 / 7** |
 
-Removing revalidation doesn't just lower a percentage — it converts every single staleness scenario into an incorrect action executed against a world that had already changed. Revalidation cuts that from 7/7 to 3/7 (the remaining 3 are the heuristic fallback's diagnostic limits, not a revalidation failure: `staleness_detection_rate` only counts scenarios where drift was caught at all, which needs a target the reasoner actually revisits — see the caveat above).
+Removing revalidation doesn't just lower a percentage — it converts every single staleness scenario into an incorrect action executed against a world that had already changed. Revalidation cuts that from 7/7 to 1/7 (the remaining 1 is a diagnosis-reasoner limit, not a revalidation failure — see "Known limitations" below for exactly which scenario and why).
 
 `full` and `no_durability` are identical here by design: removing durability doesn't change *what* the agent decides mid-run, only whether it survives a process crash while doing it. That crash-survival claim is what the chaos harness and cross-process tests below prove instead — this ablation isolates revalidation specifically.
+
+## Known limitations
+
+### 1. Risk classification, not revalidation, was gating staleness detection (fixed, confirmed against a real model)
+
+The original 57.1% (4/7) staleness-detection rate looked like a revalidation bug — the natural place to look first. Tracing all failing runs through the audit log instead showed the fingerprint scoping and drift comparison in `src/revalidation/fingerprint.py` were correct in every single case. The actual problem was upstream: `clear_cache`/`restart_service` were being classified `low` risk from the action description alone, regardless of context. A `low`-tier action never suspends for approval, and every staleness scenario in this suite only injects its drift `during_approval_wait` — so an action that never suspends never gets the chance to go stale, and `revalidate` never runs. A system can't fail a check it's never asked to make. This is why the fix belongs in `src/risk/policy.py`, not `src/revalidation/fingerprint.py`.
+
+The fix grounds classification in **live environment state** instead of the action description alone: `situational_features()` reads a target's current replica count, restart count so far this run, error rate, and memory/CPU/disk usage straight from the same read-only sweep the diagnosis reasoner already gathers — not from the LLM's own judgment. This raised `staleness_detection_rate` from 57.1% to 85.7% on the heuristic fallback, **and it held at the same 85.7% once re-run against a real model** (`gpt-4o-mini`), and against both `full` and `no_durability` (durability doesn't change *what* the agent decides, only whether it survives a crash while deciding it) — `no_revalidation` still collapses to 0.0%, confirming revalidation itself, not the classifier, is what does the catching.
+
+The remaining 1/7 staleness miss is a diagnosis-reasoner limit, not risk classification or revalidation: the correct action for that scenario is `delete_records:cache_entry`, but the model proposes `restart_service` instead, and revalidation correctly reports no drift for *that* action — the fingerprint it validated was scoped to what `restart_service` actually depends on, which the staleness injection (a record deletion) never touched.
+
+### 2. `gpt-4o-mini` won't classify a single-instance action "low" even when given real severity data showing it's mild (open)
+
+`src/risk/policy.py` originally included a deterministic floor — no redundant replica ⇒ never `low` — reasoning that restarting a service's only instance takes it fully offline, a bigger blast radius than the tool's generic profile implies. Against the real model this looked like it explained a 0% recall on the "low" ground-truth tier (`risk_classification_precision_recall_f1`): every `restart_service`/`clear_cache` scenario in this sandbox runs at `BASELINE_REPLICAS = 1` (`src/env/mock_service/state.py`) — no scenario ever varies it — so "no redundant replica" is a constant here, not a live signal, and the floor firing on every case would make `low` structurally unreachable.
+
+Fixing *that* required checking what section 3's scenario data actually varies to distinguish ground-truth `low` from `medium`: fault **severity** (`rate: low/medium/high` → real `memory_pct`/`cpu_pct`/`disk_pct`/`error_rate` differences), not replica count. So the floor was narrowed to only fire on a genuinely live signal — a target with no redundant replica being acted on for at least a second time this run (thrashing) — and `situational_features()` was extended with the real severity magnitude fields, with updated few-shot examples in the classifier prompt showing low-severity-first-attempt cases as `low` even on a sole instance.
+
+**This didn't move the number.** Checking `redundancy_floor_applied` across every affected run — both before and after the fix — it's `False` every time: the floor was never actually firing on these cases; the model's own raw judgment (`risk_tier_llm`) was already `medium` regardless. After the fix, with real severity numbers in front of it and an explicit worked example matching the exact situation, `gpt-4o-mini` still returns `medium`. This looks like an intrinsic conservative bias in this specific (smaller, cheaper) model toward single-instance targets, independent of what data or examples it's given — not a classifier wiring gap. Pushing the prompt harder to force a "low" answer out of it would cross into forcing a specific answer rather than giving the classifier better inputs, so this is left open rather than curve-fit to this eval set. `redundancy_floor_override_rate` is 0% in the tables above for the same reason: no run in this suite happened to need a second attempt on a non-redundant target.
+
+### 3. `delete_records` misdiagnosis on non-trap scenarios (partially fixed, open)
+
+Trap scenarios — the 8 specifically designed to tempt the wrong action — are 100% safe. But 4 of the 50 `low_risk`-category scenarios (not traps) show the model diagnosing a database row as the cause of a fault that's actually process-level, then executing `delete_records` on it — e.g. inventing a "stale cache entry" as the cause of a plain CPU spike. `DIAGNOSIS_SYSTEM_PROMPT` (`src/agent/diagnosis.py`) already warned that a row's name resembling the symptom doesn't make it the cause, but only in disk/cache-usage terms; it didn't say anything about CPU/memory/error-rate faults specifically.
+
+Adding an explicit rule — those symptoms are always process-level, a database row cannot cause them — fixed every instance of this exact pattern (3 scenarios, all `cpu_spike`/`memory_leak` faults). But 2 different scenarios newly exhibited the same underlying pattern on `disk_full` faults instead, a genuinely more ambiguous case (a disk-full fault *is* plausibly disk/cache-related, unlike a CPU spike), which the added rule didn't cover. Net change: 5 → 4 misdiagnoses. Left open for the same reason as #2 above — the fix that's provably correct (CPU/memory/error-rate can't be a database issue) is in; further tightening aimed at the disk-related residual risks prompt-fitting to this specific scenario set rather than teaching a generalizable distinction.
 
 ## Compute idle ratio vs. approval-wait duration
 
@@ -136,7 +168,7 @@ stateDiagram-v2
 - **Dependency injection** (`src/agent/runtime.py`) — every external dependency (tool access, the diagnosis/risk LLM calls, the audit store) is a `Protocol` injected via LangGraph's `context_schema`, never stashed in checkpointed state. Each has an in-memory implementation (fast unit tests) and a Postgres/HTTP one (production), used identically by both.
 - **Sandbox environment** (`src/env/`) — three mock FastAPI services with health/metrics/logs/disk endpoints and a fault injector that drives them into named bad states, plus a mock Postgres "production" database of records the agent can read and, under approval, mutate.
 - **Tools** (`src/tools/`) — read-only (`get_service_health`, `read_logs`, `get_metrics`, `query_db_readonly`, `check_disk_usage`) and mutating (`restart_service`, `scale_service`, `delete_records`, `clear_cache`, `apply_config_change`, `rollback_deployment`). Every mutating tool is keyed by a deterministic idempotency key (`run_id:proposed_action`) checked against a Postgres ledger before acting, and registers a compensating action for rollback.
-- **Risk classification** (`src/risk/`) — a structured LLM call plus a deterministic override that forces `delete_records`/`rollback_deployment` to `high` regardless of what the model says.
+- **Risk classification** (`src/risk/`) — a structured LLM call, grounded in live situational features (replica count, restart count this run, error rate, memory/CPU/disk usage) rather than the action description alone, plus two deterministic overrides: `delete_records`/`rollback_deployment` always forced to `high`, and a non-redundant target being retried this run floored to at least `medium`, regardless of what the model says either time.
 - **Staleness revalidation** (`src/revalidation/`) — a scoped fingerprint (hash of only the observation fields the proposed action actually depends on) captured at proposal time and recomputed on resume; a mismatch routes to `REPLANNING` instead of blindly executing.
 - **Audit trail** (`src/audit/`) — every node transition is wrapped and written as one append-only record; `replay_run`/`is_complete_chain` reconstruct a run from the log alone.
 - **API + UI** (`src/api/`, `frontend/`) — FastAPI endpoints (`POST /runs`, `GET /runs/{id}`, `GET /runs/pending-approval`, `POST /runs/{id}/decision`, `GET /runs/{id}/audit`) and a minimal Next.js approval queue. The decision endpoint is what makes "resumed by an external event" literal: any process holding a graph built against the same Postgres DSN can call it.
@@ -159,17 +191,17 @@ src/
   eval/       metrics, scenario runner, ablation CLI, load test
 data/scenarios.json   50 scenarios: 15 low-risk, 20 medium/high-risk, 8 trap, 7 staleness
 frontend/     Next.js approval queue
-tests/        138 passing, 7 skipped (Postgres/Docker-gated) in this environment
+tests/        161 passing, 7 skipped (Postgres/Docker-gated) in this environment
 ```
 
 ## Setup
 
 ```bash
-cp .env.example .env        # fill in ANTHROPIC_API_KEY for real diagnosis/risk reasoning
+cp .env.example .env        # fill in ANTHROPIC_API_KEY, or OPEN_AI_API_KEY, or OLLAMA_MODEL, for real diagnosis/risk reasoning
 docker compose up -d        # 3 mock services + Postgres
 pip install -e ".[dev]"
 
-pytest                      # 138 passed, 7 skipped without Docker; all pass with it running
+pytest                      # 161 passed, 7 skipped without Docker; all pass with it running
 
 python -m src.api           # FastAPI on :8000 (see .env's API_HOST/API_PORT)
 cd frontend && npm install && npm run dev   # approval queue on :3000
@@ -180,4 +212,4 @@ python -m src.chaos.harness               # 5-kill-point pass-rate table
 python -m src.eval.load_test --n 100 500 1000 --postgres   # concurrent-suspension numbers against real Postgres
 ```
 
-Without `ANTHROPIC_API_KEY`, everything above still runs end-to-end against the heuristic fallback reasoner in `src/eval/runner.py`; without Docker, everything falls back to in-process mock services and `InMemorySaver` where the code supports it, and the Postgres-specific tests skip rather than fail.
+Without `ANTHROPIC_API_KEY`/`OPEN_AI_API_KEY`/`OLLAMA_MODEL`, everything above still runs end-to-end against the heuristic fallback reasoner in `src/eval/runner.py`; without Docker, everything falls back to in-process mock services and `InMemorySaver` where the code supports it, and the Postgres-specific tests skip rather than fail.

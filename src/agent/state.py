@@ -47,10 +47,12 @@ class AgentState(TypedDict, total=False):
     action_parameters: dict[str, Any] | None
     action_rationale: str | None
     state_fingerprint: str | None
+    invalid_proposal_reason: str | None
 
     risk_tier_llm: str | None
     risk_tier_final: str | None
     risk_rationale: str | None
+    redundancy_floor_applied: bool | None
 
     approval_decision: ApprovalDecision | None
     approver_id: str | None

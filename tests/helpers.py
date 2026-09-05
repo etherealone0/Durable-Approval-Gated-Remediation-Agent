@@ -12,11 +12,16 @@ from src.env.mock_service.app import create_app
 from src.tools.context import InMemoryRecordsRepository, ToolContext
 
 
-def build_tool_ctx(records: list[dict] | None = None) -> ToolContext:
+def build_tool_ctx(records: list[dict] | None = None, replicas: dict[str, int] | None = None) -> ToolContext:
+    """`replicas` overrides a service's starting replica count from the
+    mock's default of 1 — needed for any test exercising a genuinely-low
+    (not floored) risk tier, since src/risk/policy.py's redundancy floor
+    forces "low" up to "medium" for a target with fewer than 2 replicas."""
+    replicas = replicas or {}
     apps = {
-        "service_a": create_app(name="service_a", has_disk=False),
-        "service_b": create_app(name="service_b", has_disk=False),
-        "service_c": create_app(name="service_c", has_disk=True),
+        "service_a": create_app(name="service_a", has_disk=False, replicas=replicas.get("service_a", 1)),
+        "service_b": create_app(name="service_b", has_disk=False, replicas=replicas.get("service_b", 1)),
+        "service_c": create_app(name="service_c", has_disk=True, replicas=replicas.get("service_c", 1)),
     }
     clients = {
         name: httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=f"http://{name}")
@@ -64,7 +69,13 @@ class ScriptedRiskClassifier:
     def __init__(self, tier: str = "low") -> None:
         self.tier = tier
 
-    async def classify(self, proposed_action: str, diagnosis: str, rationale: str | None) -> dict[str, Any]:
+    async def classify(
+        self,
+        proposed_action: str,
+        diagnosis: str,
+        rationale: str | None,
+        situational: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         return {
             "tier": self.tier,
             "reversibility": "stub",

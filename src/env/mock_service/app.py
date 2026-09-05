@@ -12,7 +12,7 @@ import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from src.env.mock_service.state import FaultRate, FaultType, ServiceState
+from src.env.mock_service.state import BASELINE_REPLICAS, FaultRate, FaultType, ServiceState
 
 
 class FaultRequest(BaseModel):
@@ -33,8 +33,8 @@ class DeployRequest(BaseModel):
     version: str
 
 
-def create_app(name: str, has_disk: bool) -> FastAPI:
-    state = ServiceState(name=name, has_disk=has_disk)
+def create_app(name: str, has_disk: bool, replicas: int = BASELINE_REPLICAS) -> FastAPI:
+    state = ServiceState(name=name, has_disk=has_disk, replicas=replicas)
     app = FastAPI(title=f"mock-{name}")
     app.state.service_state = state
 
