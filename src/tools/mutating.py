@@ -1,9 +1,9 @@
-"""Mutating tools: approval-gated in the running agent (the graph, built in
-a later phase, is what actually withholds these behind approval), but
+"""Mutating tools: approval-gated in the running agent (the graph
+in src/agent/graph.py is what actually withholds these behind approval), but
 every one is idempotent on `idempotency_key` and registers a compensating
 action here regardless of who calls it.
 
-See PROJECT_SPEC.md section 8: a repeat call with the same idempotency_key
+A repeat call with the same idempotency_key
 must no-op and return the original result rather than acting twice.
 """
 

@@ -1,4 +1,4 @@
-"""Runs the chaos harness (PROJECT_SPEC.md section 12) for one trial per
+"""Runs the chaos harness for one trial per
 kill point — enough to prove the mechanism works, not the full pass-rate
 table `python -m src.chaos.harness` produces for the README. Needs a live
 Postgres and starts its own out-of-process mock services (plain uvicorn

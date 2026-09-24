@@ -1,9 +1,8 @@
 """Dispatches a proposed_action string to the real mutating tool, verifies
 the fix with only the same read-only tools diagnosis uses (no ground-truth
-peeking), and applies a compensation on rollback (PROJECT_SPEC.md section
-8). One "tool:target" action is proposed and executed per attempt, so
-"run compensations in reverse order" is trivially satisfied by there only
-ever being one to run.
+peeking), and applies a compensation on rollback. One "tool:target" action
+is proposed and executed per attempt, so "run compensations in reverse
+order" is trivially satisfied by there only ever being one to run.
 """
 
 from __future__ import annotations

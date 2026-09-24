@@ -2,8 +2,6 @@
 in this sandbox, so the scenario validator, the diagnosis prompt, and
 anything else that needs to know what's real don't each hardcode their own
 copy.
-
-See PROJECT_SPEC.md section 2.
 """
 
 from __future__ import annotations

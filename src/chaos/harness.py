@@ -1,4 +1,4 @@
-"""Chaos harness (PROJECT_SPEC.md section 12): kills the agent process at
+"""Chaos harness: kills the agent process at
 5 defined points, restarts it, and asserts correct resumption with no
 duplicate side effects. Requires a live Postgres (for the checkpointer
 and the executed_actions/audit/runs tables to survive a kill) and starts
@@ -244,7 +244,7 @@ def trial_mid_executing(services: MockServices, dsn: str) -> KillPointResult:
     # Risk is low, so the run never suspends — execute() never checkpointed
     # (it was killed right after the tool call, before returning), so this
     # is a restart from START, same as the DIAGNOSING trial. The tool's own
-    # idempotency ledger (Postgres, section 8) is what must make the
+    # idempotency ledger (Postgres) is what must make the
     # replayed restart_service call a no-op, not the graph's checkpoint.
     proc2 = _launch(["start", dsn, run_id], {**services.env_vars(), "CHAOS_TIER": "low"})
     out, err = proc2.communicate(timeout=20)

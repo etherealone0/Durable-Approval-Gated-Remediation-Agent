@@ -1,4 +1,4 @@
-"""Load test (PROJECT_SPEC.md section 13): start N workflows that all
+"""Load test: start N workflows that all
 reach AWAITING_APPROVAL, hold them suspended, then approve them all in a
 burst. Measures memory per suspended workflow, whether any state was
 lost, burst-resume latency percentiles, and (with a live Postgres) DB
@@ -9,7 +9,7 @@ connection behavior during the burst.
 
 Uses InMemorySaver by default so it runs anywhere; --postgres switches to
 a real AsyncPostgresSaver against DATABASE_URL, which is what makes the
-concurrent-suspension number (section 11 #14) a claim about the actual
+concurrent-suspension number a claim about the actual
 durable checkpointer rather than a Python dict.
 
 Deliberately does not import test doubles from tests/ (src/ must never

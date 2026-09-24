@@ -1,4 +1,4 @@
-"""Verifies compute_fingerprint (PROJECT_SPEC.md section 7): the hash is
+"""Verifies compute_fingerprint: the hash is
 scoped to only the observation fields the proposed action's tool+target
 actually depends on, so an unrelated change elsewhere doesn't count as
 drift, but a relevant change always does."""

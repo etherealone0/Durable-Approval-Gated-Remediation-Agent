@@ -1,6 +1,6 @@
-"""CLI entrypoint (PROJECT_SPEC.md section 11): runs the full scenario
+"""CLI entrypoint: runs the full scenario
 suite across the three required ablation configurations, writes
-results/runs.jsonl (the "full" config, per the section-11 schema) plus
+results/runs.jsonl (the "full" config) plus
 results/runs_<mode>.jsonl for each config, computes results/metrics_summary.json,
 and prints the ablation comparison table.
 

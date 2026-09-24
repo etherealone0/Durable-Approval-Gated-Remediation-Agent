@@ -1,16 +1,15 @@
 """Turns a diagnostic sweep (src/agent/observations.py) into a diagnosis,
-and separately turns a diagnosis into a proposed remediation action
-(PROJECT_SPEC.md section 1). These are two reasoning steps, not one,
-because REPLANNING routes straight back to ACTION_PROPOSED without
-re-diagnosing (section 4's diagram) — a rejected, stale, or failed action
-needs a fresh *proposal* against the same diagnosis, informed by why the
-last one didn't work, not a repeat of the same call producing the same
-answer.
+and separately turns a diagnosis into a proposed remediation action. These
+are two reasoning steps, not one, because REPLANNING routes straight back to
+ACTION_PROPOSED without re-diagnosing (see the state machine) — a rejected,
+stale, or failed action needs a fresh *proposal* against the same diagnosis,
+informed by why the last one didn't work, not a repeat of the same call
+producing the same answer.
 
 The reasoning itself is an LLM call: distinguishing a genuine root cause
-from a misleading surface symptom — cascading upstream failures, a
-database row whose name resembles the real problem but isn't it — is
-exactly the judgment call the trap scenarios in section 3 are designed to
+from a misleading surface symptom — cascading upstream failures, a database
+row whose name resembles the real problem but isn't it — is exactly the
+judgment call the trap scenarios in data/scenarios.json are designed to
 test, so a hardcoded heuristic here would defeat the point.
 
 DiagnosisReasoner is a Protocol so tests can substitute a scripted

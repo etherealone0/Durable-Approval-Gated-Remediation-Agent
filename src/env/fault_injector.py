@@ -1,7 +1,7 @@
 """Fault injector: puts the sandbox environment into a named bad state on
 command, and resets it to a clean baseline between runs.
 
-See PROJECT_SPEC.md section 2. Talks to each mock service's /admin/*
+Talks to each mock service's /admin/*
 endpoints over HTTP rather than mutating state directly, so it exercises
 the same interface a real chaos tool would use and works whether the
 services are in-process (tests) or in separate docker-compose containers.

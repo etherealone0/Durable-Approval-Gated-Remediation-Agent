@@ -1,5 +1,5 @@
 """Drives one scenario from data/scenarios.json through the real graph and
-produces one results/runs.jsonl-shaped record (PROJECT_SPEC.md section 11),
+produces one results/runs.jsonl-shaped record,
 in one of the three required ablation configurations:
 
 - "full": AsyncPostgresSaver when a DSN is available (durable) with

@@ -1,9 +1,7 @@
-"""Validates data/scenarios.json against the sandbox environment (section
-2) and the scenario schema (section 3): every fault_injection must be
-something the FaultInjector from Prompt 2 can actually produce, and every
+"""Validates data/scenarios.json against the sandbox environment and
+the scenario schema: every fault_injection must be something the
+FaultInjector (src/env/fault_injector.py) can actually produce, and every
 action reference must name a real tool against a real target.
-
-See PROJECT_SPEC.md section 3.
 """
 
 from __future__ import annotations

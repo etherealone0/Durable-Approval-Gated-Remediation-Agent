@@ -1,7 +1,6 @@
 """Pydantic input/output schemas for every read-only and mutating tool.
-
-See PROJECT_SPEC.md section 2 for the tool list and section 8 for the
-idempotency/compensation contract every mutating tool follows.
+See src/tools/mutating.py for the idempotency/compensation contract every
+mutating tool follows.
 """
 
 from __future__ import annotations

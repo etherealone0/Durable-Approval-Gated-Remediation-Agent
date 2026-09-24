@@ -1,4 +1,4 @@
-"""FastAPI interface (PROJECT_SPEC.md section 10): start/inspect runs,
+"""FastAPI interface: start/inspect runs,
 list the approval queue, and submit decisions that trigger workflow
 resumption. create_app() takes its dependencies as arguments so tests can
 inject in-memory doubles; build_production_app() wires the real ones

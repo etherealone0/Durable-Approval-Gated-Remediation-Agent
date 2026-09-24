@@ -1,8 +1,6 @@
 """AsyncPostgresSaver factory. This is the only checkpointer used against
 real workloads; InMemorySaver is for unit tests of graph control flow
 only, never for anything claiming durability.
-
-See PROJECT_SPEC.md section 5.
 """
 
 from __future__ import annotations

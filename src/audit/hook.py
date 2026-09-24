@@ -1,9 +1,8 @@
 """Wraps every graph node so its transition is written to the audit log
-without each node having to do its own bookkeeping (PROJECT_SPEC.md
-section 9). await_approval is the one node that can suspend mid-call
-(interrupt()) — while suspended, the wrapped call never reaches the
-audit write, and re-runs from the top on resume, so a record is only
-written once the transition actually completes.
+without each node having to do its own bookkeeping. await_approval is the
+one node that can suspend mid-call (interrupt()) — while suspended, the
+wrapped call never reaches the audit write, and re-runs from the top on
+resume, so a record is only written once the transition actually completes.
 """
 
 from __future__ import annotations

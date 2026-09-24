@@ -1,7 +1,7 @@
-"""Wires the state machine from PROJECT_SPEC.md section 4 into a LangGraph
+"""Wires the agent's state machine into a LangGraph
 StateGraph, and the two entrypoints (start/resume) that always drive it
 with durability="sync" so an approval-gate transition is persisted before
-the process can die (section 5).
+the process can die.
 """
 
 from __future__ import annotations
@@ -36,11 +36,11 @@ NODES = {
 
 
 def build_graph(checkpointer, *, revalidate: bool = True) -> CompiledStateGraph:
-    """`revalidate=False` builds the --no-revalidation ablation (PROJECT_SPEC.md
-    section 11): the revalidate node is left out of the graph entirely and
-    an approved/edited decision routes straight to prepare_execution, so
-    an approved action is executed blindly against whatever the world
-    looks like at resume time. See src/eval/runner.py."""
+    """`revalidate=False` builds the --no-revalidation ablation: the
+    revalidate node is left out of the graph entirely and an approved/edited
+    decision routes straight to prepare_execution, so an approved action is
+    executed blindly against whatever the world looks like at resume time.
+    See src/eval/runner.py."""
     graph = StateGraph(AgentState, context_schema=AgentRuntimeContext)
 
     node_names = dict(NODES)

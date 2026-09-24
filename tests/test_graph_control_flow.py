@@ -1,6 +1,6 @@
-"""Exercises every named state and transition in PROJECT_SPEC.md section
-4's state machine diagram, using InMemorySaver (unit-test only checkpointer
-per section 5; durability itself is proven separately in
+"""Exercises every named state and transition in the state machine
+diagram (README.md), using InMemorySaver (unit-test only checkpointer;
+durability itself is proven separately in
 test_graph_cross_process.py against a real Postgres) and scripted
 DiagnosisReasoner/RiskClassifier doubles (real LLM reasoning is exercised
 separately against the scenario suite with an API key, not in this

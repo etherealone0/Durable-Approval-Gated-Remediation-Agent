@@ -1,4 +1,4 @@
-"""Proves PROJECT_SPEC.md section 10's explicit requirement literally:
+"""Proves the approval API's core requirement literally:
 "Approvals must be actionable from a different machine than the one
 running the agent." Each half runs as its own OS subprocess, building its
 own independent FastAPI app instance; the only thing they share is the

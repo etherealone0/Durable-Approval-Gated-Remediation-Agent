@@ -1,4 +1,4 @@
-"""Deterministic policy overrides (PROJECT_SPEC.md section 6): the LLM's
+"""Deterministic policy overrides: the LLM's
 risk tier is never trusted alone for safety-critical actions.
 
 Two independent, classifier-agnostic overrides — both act on whatever tier
@@ -22,8 +22,8 @@ the classifier returned, heuristic fallback or real model alike:
    scenario ever varies it — so "no redundant replica" is a constant, not
    a live situational signal, and flooring on it alone made "low"
    unreachable for restart_service/clear_cache across the entire suite,
-   contradicting PROJECT_SPEC.md section 3's ~15 scenarios that are
-   supposed to proceed autonomously. The actual signal section 3's data
+   contradicting the ~15 low_risk scenarios in data/scenarios.json that
+   are supposed to proceed autonomously. The actual signal that data
    varies is fault *severity* (rate: low/medium/high -> real magnitude
    differences in memory_pct/cpu_pct/disk_pct/error_rate, all now in
    situational_features below) — that's what should carry low-vs-medium
@@ -58,7 +58,7 @@ def situational_features(observations: dict[str, Any], proposed_action: str) -> 
     record kind with no service-level metrics surface.
 
     Deliberately does not include a "number of dependent services"
-    feature: the sandbox (PROJECT_SPEC.md section 2) has no dependency
+    feature: the sandbox has no dependency
     graph between service_a/b/c — the "cascading upstream" language in
     some trap scenarios' expected_diagnosis is narrative flavor for the
     diagnosis reasoner, not a mechanically-tracked relationship any tool

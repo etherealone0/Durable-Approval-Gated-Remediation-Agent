@@ -1,4 +1,4 @@
-"""LLM-based risk classification (PROJECT_SPEC.md section 6). RiskClassifier
+"""LLM-based risk classification. RiskClassifier
 is a Protocol so tests can substitute a scripted classifier and exercise
 the deterministic policy override (src/risk/policy.py) without an API key.
 """

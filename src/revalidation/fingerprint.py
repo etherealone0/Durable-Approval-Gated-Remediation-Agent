@@ -1,7 +1,7 @@
-"""State fingerprinting for staleness revalidation (PROJECT_SPEC.md
-section 7): a hash of the observation fields a proposed action's outcome
-actually depends on, captured at proposal time and recomputed at resume
-time. A mismatch on any of those fields is material drift.
+"""State fingerprinting for staleness revalidation: a hash of the
+observation fields a proposed action's outcome actually depends on, captured
+at proposal time and recomputed at resume time. A mismatch on any of those
+fields is material drift.
 
 Scoping the hash to just the relevant fields (rather than hashing the
 whole environment) is deliberate: an unrelated service degrading while a
@@ -40,7 +40,7 @@ def relevant_fields(observations: dict[str, Any], tool: str, target: str) -> dic
 
     if tool == "apply_config_change":
         # Config values aren't observable through any read-only tool
-        # (PROJECT_SPEC.md section 2 lists only 5); fall back to health,
+        # (src/tools/readonly.py has only 5); fall back to health,
         # which is also currently unused by any scenario's correct_actions.
         return _service_fields(observations, target, ["status"])
 

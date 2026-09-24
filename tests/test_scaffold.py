@@ -1,5 +1,4 @@
-"""Sanity check that the package scaffold from PROJECT_SPEC.md section 14
-(Prompt 1) imports cleanly."""
+"""Sanity check that every top-level package imports cleanly."""
 
 import importlib
 

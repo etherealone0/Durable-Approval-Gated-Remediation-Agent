@@ -2,7 +2,7 @@
 FastAPI app instance and submits an approval decision for a run it never
 saw start. Shares nothing with api_create_run.py except the Postgres DSN
 — this is the literal "different machine" proof for the decision
-endpoint (PROJECT_SPEC.md section 10).
+endpoint.
 
 Usage: python api_submit_decision.py <dsn> <run_id>
 """

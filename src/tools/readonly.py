@@ -1,7 +1,5 @@
 """Read-only diagnostic tools. No approval gate: these never mutate the
 sandbox environment.
-
-See PROJECT_SPEC.md section 2.
 """
 
 from __future__ import annotations

@@ -1,5 +1,4 @@
-"""Request/response schemas for the FastAPI interface (PROJECT_SPEC.md
-section 10)."""
+"""Request/response schemas for the FastAPI interface."""
 
 from __future__ import annotations
 

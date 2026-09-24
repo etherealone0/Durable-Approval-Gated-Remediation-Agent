@@ -1,6 +1,5 @@
-"""Structured output for LLM-based risk classification (PROJECT_SPEC.md
-section 6): never free text, always one of low/medium/high plus the
-factors that justify it.
+"""Structured output for LLM-based risk classification: never free text,
+always one of low/medium/high plus the factors that justify it.
 """
 
 from __future__ import annotations

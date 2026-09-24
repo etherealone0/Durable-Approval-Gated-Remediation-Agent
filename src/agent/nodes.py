@@ -1,6 +1,5 @@
-"""Node implementations for the state machine in PROJECT_SPEC.md section
-4. See state.py's module docstring for which nodes are still stubs and
-which future prompt replaces them with real logic.
+"""Node implementations for the agent's state machine. See state.py's
+module docstring for where each node's real logic lives.
 """
 
 from __future__ import annotations
@@ -122,7 +121,7 @@ def route_after_approval(state: AgentState) -> str:
 
 
 def route_after_approval_no_revalidation(state: AgentState) -> str:
-    """The --no-revalidation ablation (PROJECT_SPEC.md section 11): skips
+    """The --no-revalidation ablation: skips
     straight to prepare_execution on approval, executing the proposed
     action blindly against whatever the world looks like now, with no
     drift check at all. Used to measure how many incorrect actions
@@ -139,8 +138,7 @@ async def revalidate(state: AgentState) -> dict[str, Any]:
     """Re-runs the read-only diagnostic sweep and recomputes the
     state_fingerprint against the same proposed_action; a mismatch means
     the world changed while this run was suspended waiting for approval,
-    so the approved action must not be blindly executed (PROJECT_SPEC.md
-    section 7)."""
+    so the approved action must not be blindly executed."""
     runtime = get_runtime(AgentRuntimeContext)
     fresh_observations = await gather_observations(runtime.context.tool_ctx)
     fresh_fingerprint = compute_fingerprint(fresh_observations, state["proposed_action"])
@@ -161,7 +159,7 @@ async def prepare_execution(state: AgentState) -> dict[str, Any]:
     """A deterministic key derived from run_id + proposed_action, not a
     random one: if the process dies mid-EXECUTING, LangGraph reruns this
     whole node from scratch on resume, and it must regenerate the exact
-    same key so the mutating tool's own idempotency check (section 8)
+    same key so the mutating tool's own idempotency check
     recognizes the retry and no-ops instead of double-applying."""
     idempotency_key = f"{state['run_id']}:{state['proposed_action']}"
     return {"status": State.EXECUTING.value, "idempotency_key": idempotency_key}

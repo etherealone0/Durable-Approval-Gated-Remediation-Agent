@@ -3,8 +3,8 @@ scenarios (scripted reasoner/classifier, no API key or Docker needed) to
 prove the harness produces correctly-shaped runs.jsonl records and that
 the --no-revalidation ablation actually behaves differently from the
 default: it executes a stale approved action blindly where the default
-config detects the drift and replans instead (PROJECT_SPEC.md section 11's
-required ablation — "the strongest single result in the project").
+config detects the drift and replans instead (the revalidation ablation
+in README.md — "the strongest single result in the project").
 """
 
 from __future__ import annotations

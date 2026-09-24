@@ -1,6 +1,5 @@
 -- Mock production database schema. Loaded automatically by the official
 -- postgres image on first container start (docker-entrypoint-initdb.d).
--- See PROJECT_SPEC.md section 2.
 
 CREATE TABLE IF NOT EXISTS records (
     id SERIAL PRIMARY KEY,
@@ -17,7 +16,7 @@ INSERT INTO records (kind, payload) VALUES
     ('session', 'session-a2: expired'),
     ('cache_entry', 'cache-key-42: stale');
 
--- Idempotency ledger for mutating tools (PROJECT_SPEC.md section 8): a
+-- Idempotency ledger for mutating tools: a
 -- mutating tool checks its idempotency_key here before acting and no-ops
 -- on repeat, since the same key can be resumed against after a process
 -- kill and must not double-apply.
@@ -30,7 +29,7 @@ CREATE TABLE IF NOT EXISTS executed_actions (
     executed_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Append-only audit trail (PROJECT_SPEC.md section 9): one row per state
+-- Append-only audit trail: one row per state
 -- transition, complete enough to reconstruct any run end-to-end from this
 -- table alone (see src/audit/replay.py).
 CREATE TABLE IF NOT EXISTS audit_log (
@@ -49,7 +48,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 CREATE INDEX IF NOT EXISTS audit_log_run_id_idx ON audit_log (run_id, id);
 
--- Latest-known-status index for the API (PROJECT_SPEC.md section 10): a
+-- Latest-known-status index for the API: a
 -- denormalized snapshot per run so GET /runs/{id} and GET
 -- /runs/pending-approval don't need to touch the checkpointer directly.
 -- The audit_log remains the source of truth for history; this is just a

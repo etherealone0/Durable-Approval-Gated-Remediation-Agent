@@ -1,10 +1,10 @@
-"""Exercises real execution, verification, and rollback (PROJECT_SPEC.md
-section 8): execute_action dispatches to the real mutating tools,
-verify_action checks outcomes with only read-only tools (no ground-truth
-peeking), and apply_compensation actually reverses a failed action.
+"""Exercises real execution, verification, and rollback: execute_action
+dispatches to the real mutating tools, verify_action checks outcomes with
+only read-only tools (no ground-truth peeking), and apply_compensation
+actually reverses a failed action.
 
 The literal "kill the OS process mid-EXECUTING" proof belongs to the
-chaos harness (Prompt 12, section 12) since it needs a real Postgres
+chaos harness (src/chaos/harness.py) since it needs a real Postgres
 checkpointer and separate processes like test_graph_cross_process.py.
 Here we prove the specific mechanism prepare_execution relies on: the
 idempotency_key is deterministic (run_id + proposed_action), so replaying
@@ -99,7 +99,7 @@ async def test_deterministic_key_prevents_double_apply_across_a_simulated_replay
     """Simulates a process death mid-EXECUTING: prepare_execution's key is
     deterministic (run_id + proposed_action), so a rerun from scratch
     calls execute_action again with the identical key. The mutating
-    tool's own idempotency ledger (Prompt 3) must make the replay a no-op."""
+    tool's own idempotency ledger must make the replay a no-op."""
     ctx = build_tool_ctx()
     run_id, proposed_action = "run-crash-42", "restart_service:service_a"
     key = f"{run_id}:{proposed_action}"

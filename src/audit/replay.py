@@ -1,6 +1,6 @@
-"""Reconstructs a run's full state sequence from its audit log alone
-(PROJECT_SPEC.md section 9). Used both for inspection and as the basis of
-the audit_completeness metric (section 11): a complete log's from/to
+"""Reconstructs a run's full state sequence from its audit log alone.
+Used both for inspection and as the basis of the audit_completeness
+metric: a complete log's from/to
 chain has no gaps.
 """
 

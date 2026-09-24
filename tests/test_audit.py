@@ -1,4 +1,4 @@
-"""Exercises the audit trail (PROJECT_SPEC.md section 9): every node
+"""Exercises the audit trail: every node
 transition is logged with actor/decision/rationale, and the full run can
 be reconstructed from the log alone."""
 

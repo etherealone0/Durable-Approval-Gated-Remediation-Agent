@@ -1,4 +1,4 @@
-"""Exercises real staleness revalidation (PROJECT_SPEC.md section 7): the
+"""Exercises real staleness revalidation: the
 environment is genuinely mutated — through the same mock-service HTTP
 surface the fault injector uses — while a run sits suspended at
 AWAITING_APPROVAL, mirroring the staleness scenarios in

@@ -1,4 +1,4 @@
-"""Exercises the FastAPI interface (PROJECT_SPEC.md section 10) end to
+"""Exercises the FastAPI interface end to
 end over real HTTP semantics (httpx + ASGITransport), with InMemorySaver
 and in-memory registries so no Postgres is needed. The decision endpoint
 triggering real workflow resumption is the main thing under test; a

@@ -1,12 +1,12 @@
 """The workflow's persisted state and the named states from the state
-machine diagram in PROJECT_SPEC.md section 4.
+machine diagram (see README.md).
 
-Every node is real: diagnose and propose_action since Prompt 6
-(src/agent/diagnosis.py, src/agent/observations.py,
-src/revalidation/fingerprint.py), classify_risk since Prompt 7
-(src/risk/classifier.py, src/risk/policy.py), revalidate since Prompt 8
-(src/revalidation/fingerprint.py), and prepare_execution/execute/verify/
-rolling_back since Prompt 9 (src/agent/execution.py).
+Where each node's logic lives: diagnose and propose_action in
+src/agent/diagnosis.py, src/agent/observations.py and
+src/revalidation/fingerprint.py; classify_risk in src/risk/classifier.py
+and src/risk/policy.py; revalidate in src/revalidation/fingerprint.py;
+and prepare_execution/execute/verify/rolling_back in
+src/agent/execution.py.
 """
 
 from __future__ import annotations

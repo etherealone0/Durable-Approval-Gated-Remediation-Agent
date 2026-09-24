@@ -1,9 +1,7 @@
 """Proves idempotency for every mutating tool: calling the same tool twice
 with the same idempotency_key must no-op on the second call (the recorded
 result is returned, but the underlying side effect happens only once),
-even when the second call's other arguments differ.
-
-See PROJECT_SPEC.md section 8."""
+even when the second call's other arguments differ."""
 
 import httpx
 import pytest

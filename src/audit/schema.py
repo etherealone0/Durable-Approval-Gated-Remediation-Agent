@@ -1,4 +1,4 @@
-"""One audit record per state transition (PROJECT_SPEC.md section 9),
+"""One audit record per state transition,
 with exactly the fields listed there."""
 
 from __future__ import annotations

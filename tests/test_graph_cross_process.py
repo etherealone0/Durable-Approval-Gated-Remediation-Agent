@@ -1,4 +1,4 @@
-"""Proves the section 5 claim literally: a workflow suspended by one
+"""Proves the durability claim literally: a workflow suspended by one
 process is resumed by a completely separate process, using only its
 thread_id, against a real AsyncPostgresSaver. Each half runs as its own
 OS subprocess (tests/_subprocess_helpers/) so there is no shared Python

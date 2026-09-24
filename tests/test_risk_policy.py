@@ -1,8 +1,8 @@
-"""Unit tests for the deterministic risk policy overrides (PROJECT_SPEC.md
-section 6): delete_records and rollback_deployment are always high
-regardless of what the LLM says; a target with no redundant replica that's
-being repeated this run (restart_count_this_run >= 1) is floored to at
-least medium; everything else passes through unchanged."""
+"""Unit tests for the deterministic risk policy overrides: delete_records
+and rollback_deployment are always high regardless of what the LLM says; a
+target with no redundant replica that's being repeated this run
+(restart_count_this_run >= 1) is floored to at least medium; everything else
+passes through unchanged."""
 
 import pytest
 

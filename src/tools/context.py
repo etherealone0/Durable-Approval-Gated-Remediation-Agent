@@ -2,8 +2,6 @@
 mutating-tool logic (idempotency, compensation) is unit-testable without a
 live Postgres, while a real Postgres-backed implementation exists for use
 against docker-compose.
-
-See PROJECT_SPEC.md sections 2 and 8.
 """
 
 from __future__ import annotations

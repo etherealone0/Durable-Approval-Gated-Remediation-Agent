@@ -1,4 +1,4 @@
-"""Append-only audit log storage (PROJECT_SPEC.md section 9), behind a
+"""Append-only audit log storage, behind a
 Protocol so graph tests don't need a live Postgres.
 """
 

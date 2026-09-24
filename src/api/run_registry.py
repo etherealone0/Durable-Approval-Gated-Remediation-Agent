@@ -1,6 +1,6 @@
 """A denormalized "latest known status" snapshot per run, so the API's
-GET /runs/{id} and GET /runs/pending-approval (PROJECT_SPEC.md section 10)
-don't need to touch the checkpointer. The audit log (section 9) remains
+GET /runs/{id} and GET /runs/pending-approval don't need to touch the
+checkpointer. The audit log remains
 the source of truth for full history; this is just a queryable cache the
 API updates after every start/resume call.
 """

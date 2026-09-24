@@ -3,7 +3,7 @@ tools: health/metrics/logs for every service, disk usage for services with
 a disk surface, and every record currently in the mock database.
 
 Used at proposal time (this phase) and reused unchanged at resume time by
-revalidation (PROJECT_SPEC.md section 7), since staleness is defined as
+revalidation, since staleness is defined as
 drift between two sweeps taken with the same method.
 """
 

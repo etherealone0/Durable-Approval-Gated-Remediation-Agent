@@ -1,9 +1,8 @@
-"""Standalone agent process for the chaos harness (PROJECT_SPEC.md
-section 12): starts or resumes a run against real, out-of-process mock
-services and a real Postgres checkpointer/audit/executed-actions store,
-so killing THIS process (which src/chaos/harness.py does, at the moments
-marked by src/chaos/hooks.py) tests genuine durability rather than
-in-memory state that would die with it.
+"""Standalone agent process for the chaos harness: starts or resumes a run
+against real, out-of-process mock services and a real Postgres
+checkpointer/audit/executed-actions store, so killing THIS process (which
+src/chaos/harness.py does, at the moments marked by src/chaos/hooks.py)
+tests genuine durability rather than in-memory state that would die with it.
 
 Deliberately does not import test doubles from tests/ — src/ must never
 depend on tests/ — so the scripted reasoner/classifier below are a small,

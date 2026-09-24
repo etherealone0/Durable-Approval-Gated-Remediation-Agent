@@ -1,7 +1,7 @@
 """Validates data/scenarios.json: every fault_injection must be producible
-by the FaultInjector from Prompt 2, every action reference must be well
-formed, and the required coverage split from PROJECT_SPEC.md section 3
-must hold (15 low-risk / 20 medium-high-risk / 8 trap / 7 staleness)."""
+by the FaultInjector, every action reference must be well
+formed, and the required coverage split must hold (15 low-risk / 20
+medium-high-risk / 8 trap / 7 staleness)."""
 
 import json
 from pathlib import Path

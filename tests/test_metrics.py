@@ -1,7 +1,6 @@
-"""Unit tests for every metric function in src/eval/metrics.py
-(PROJECT_SPEC.md section 11), against small synthetic runs.jsonl-shaped
-fixtures so each definition can be checked in isolation without running
-the graph at all.
+"""Unit tests for every metric function in src/eval/metrics.py, against
+small synthetic runs.jsonl-shaped fixtures so each definition can be checked
+in isolation without running the graph at all.
 """
 
 from __future__ import annotations
