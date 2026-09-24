@@ -15,8 +15,9 @@ DATABASE_URL is set (docker-compose up), and falls back to InMemorySaver
 otherwise so the suite still runs end-to-end without it — durability
 itself isn't being tested in that fallback, only what the ablation flags
 change about graph behavior. Uses AnthropicDiagnosisReasoner/
-AnthropicRiskClassifier when ANTHROPIC_API_KEY is set, else Ollama when
-OLLAMA_MODEL is set, else the heuristic fallback in src/eval/runner.py;
+AnthropicRiskClassifier when ANTHROPIC_API_KEY is set, else OpenAI when
+OPEN_AI_API_KEY is set, else Ollama when OLLAMA_MODEL is set, else the
+heuristic fallback in src/eval/runner.py;
 the summary records which was used.
 
 Each scenario's record is flushed to results/runs_<mode>.jsonl (and

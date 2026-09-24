@@ -27,7 +27,7 @@ The numbers below come from the actual test suite and evaluation harness in this
 | Metric | Result |
 |---|---|
 | Time to resume (decision API call → leaving `AWAITING_APPROVAL`) | p50 37 ms · p95 2895 ms · p99 3059 ms⁴ |
-| Compute idle ratio (avg. across all suspended runs) | 0.024⁵ |
+| Compute idle ratio (avg. across all suspended runs) | 0.025⁵ |
 | Rollback success rate | 100% |
 | Cost per run | 1,399 tokens · 3.38 LLM calls avg · **$0.0084/run** (real OpenAI billing, not an estimate) |
 
@@ -185,6 +185,7 @@ src/
   risk/       LLM risk classification + deterministic policy override
   revalidation/  state fingerprinting for staleness detection
   durability/ AsyncPostgresSaver factory (+ Windows event-loop fix)
+  llm/        shared local Ollama HTTP client
   audit/      append-only audit log, replay, the with_audit() wrapper
   api/        FastAPI app + production entrypoint (python -m src.api)
   chaos/      process-kill harness, real subprocess mock services
